@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { OpportunityTable } from "@/components/OpportunityTable";
 import { RefreshButton } from "@/components/RefreshButton";
 import { Venue } from "@/components/Venue";
@@ -72,12 +74,11 @@ export default async function Page() {
       <footer>
         <div className="matchup">
           <Venue venue="avantis" size={22} />
-          <span className="cross">×</span>
-          {HEDGE_VENUES.map((v, i) => (
-            <span className="matchup-alt" key={v}>
-              {i > 0 && <span className="or">or</span>}
+          {HEDGE_VENUES.map((v) => (
+            <Fragment key={v}>
+              <span className="cross">×</span>
               <Venue venue={v} size={22} />
-            </span>
+            </Fragment>
           ))}
         </div>
 
