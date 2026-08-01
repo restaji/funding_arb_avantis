@@ -1,7 +1,13 @@
-import { Venue } from "@/components/Venue";
+import { Venue, venueTone } from "@/components/Venue";
 import { bps, earnClass, pct, share, usd } from "@/lib/format";
 import { CLASS_LABEL } from "@/lib/symbols";
-import { legsOf, type Opportunity, type Side } from "@/lib/types";
+import {
+  legsOf,
+  VENUE_LABEL,
+  type Opportunity,
+  type Side,
+  type VenueId,
+} from "@/lib/types";
 
 const SIDE_WORD = { long: "Long", short: "Short" } as const;
 
@@ -10,12 +16,12 @@ function LegRow({
   side,
   dailyPct,
 }: {
-  venue: "avantis" | "variational";
+  venue: VenueId;
   side: Side;
   dailyPct: number;
 }) {
   return (
-    <div className={`leg ${venue === "avantis" ? "av" : "va"}`}>
+    <div className={`leg ${venueTone(venue)}`}>
       <span className={`side ${side}`}>{SIDE_WORD[side]}</span>
       <Venue venue={venue} size={17} />
       <span className="leg-num">
@@ -52,7 +58,7 @@ export function LeadCard({
       <div className="legs">
         <LegRow venue="avantis" side={o.anchorSide} dailyPct={anchor.dailyPct} />
         <LegRow
-          venue="variational"
+          venue={o.hedgeVenue}
           side={o.anchorSide === "long" ? "short" : "long"}
           dailyPct={hedge.dailyPct}
         />
@@ -71,6 +77,10 @@ export function LeadCard({
 
       <div className="lead-foot">
         <span>{usd(o.volume24hUsd)} Avantis 24h volume</span>
+        <span className="dot">·</span>
+        <span>
+          {usd(o.hedgeVolume24hUsd)} {VENUE_LABEL[o.hedgeVenue]} 24h volume
+        </span>
         <span className="dot">·</span>
         <span>{share(o.avantisOiUtil, 1)} of the Avantis OI cap used</span>
         {o.caveat && (

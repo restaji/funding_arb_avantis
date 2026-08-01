@@ -3,15 +3,15 @@ import { type Blocked, type BlockedReason } from "@/lib/types";
 const REASON_LABEL: Record<BlockedReason, string> = {
   no_edge: "No edge after the Avantis fee",
   anchor_closed: "Avantis market closed",
-  hedge_closed: "Variational market closed",
-  not_listed_variational: "Not listed on Variational",
+  hedge_closed: "Every hedge market closed",
+  not_listed_hedge: "Not listed on any hedge venue",
 };
 
 const ORDER: BlockedReason[] = [
   "no_edge",
   "anchor_closed",
   "hedge_closed",
-  "not_listed_variational",
+  "not_listed_hedge",
 ];
 
 /** Withheld assets, grouped by why. Each asset carries its detail on hover. */

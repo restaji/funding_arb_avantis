@@ -3,7 +3,14 @@
     "allow": [
       "Bash(gh auth *)",
       "Bash(gh repo *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(git ls-remote *)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(curl -s \"https://api.github.com/repos/restaji/funding_arb_avantis\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('default_branch:', d.get\\('default_branch'\\)\\); print\\('size:', d.get\\('size'\\)\\); print\\(d.get\\('message'\\)\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/restaji/funding_arb_avantis/branches\")"
     ]
   }
 }

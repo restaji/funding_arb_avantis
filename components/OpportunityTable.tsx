@@ -2,42 +2,51 @@
 
 import { useMemo, useState } from "react";
 
-import { Venue } from "@/components/Venue";
+import { Venue, venueTone } from "@/components/Venue";
 import { bps, earnClass, pct, share, usd } from "@/lib/format";
 import { CLASS_LABEL, CLASS_ORDER, type AssetClass } from "@/lib/symbols";
-import { legsOf, type Opportunity } from "@/lib/types";
+import {
+  HEDGE_VENUES,
+  legsOf,
+  VENUE_LABEL,
+  type HedgeVenueId,
+  type Opportunity,
+} from "@/lib/types";
 
 type SortKey =
   | "rank"
   | "asset"
   | "trade"
   | "av"
-  | "va"
+  | "hedge"
   | "bar"
   | "net"
   | "apr"
   | "vol"
+  | "hvol"
   | "oi";
 
 interface Row {
   o: Opportunity;
   rank: number;
   avBps: number;
-  vaBps: number;
+  hedgeBps: number;
 }
 
 const VALUE: Record<SortKey, (r: Row) => number | string> = {
   rank: (r) => r.rank,
   asset: (r) => r.o.asset,
-  // Which way round the Avantis leg sits, so the two directions group together.
-  trade: (r) => r.o.anchorSide,
+  // Which venue is on the far side and which way round Avantis sits, so the
+  // rows that are the same trade group together.
+  trade: (r) => `${r.o.hedgeVenue} ${r.o.anchorSide}`,
   av: (r) => r.avBps,
-  va: (r) => r.vaBps,
+  hedge: (r) => r.hedgeBps,
   // The bar draws the net, so sorting it sorts by what the bar shows.
   bar: (r) => r.o.netCarryBps,
   net: (r) => r.o.netCarryBps,
   apr: (r) => r.o.carryAprPct,
   vol: (r) => r.o.volume24hUsd,
+  hvol: (r) => r.o.hedgeVolume24hUsd,
   oi: (r) => r.o.avantisOiUtil,
 };
 
@@ -54,15 +63,15 @@ const ASC_FIRST = new Set<SortKey>(["rank", "asset", "trade"]);
  * Anything past the scale is drawn hard against the edge and flagged, rather
  * than allowed to set the scale for everyone else.
  */
-function balance(avBps: number, vaBps: number, scale: number) {
-  const segs: Array<{ tone: "av" | "va"; left: number; width: number }> = [];
+function balance(avBps: number, hedgeBps: number, hedgeTone: string, scale: number) {
+  const segs: Array<{ tone: string; left: number; width: number }> = [];
   let left = 50;
   let right = 50;
   let over: "left" | "right" | null = null;
 
   for (const [tone, earn] of [
     ["av", -avBps],
-    ["va", -vaBps],
+    [hedgeTone, -hedgeBps],
   ] as const) {
     const width = (Math.abs(earn) / scale) * 50;
     if (width <= 0) continue;
@@ -86,7 +95,7 @@ function balance(avBps: number, vaBps: number, scale: number) {
     if (b > a) segs.push({ tone, left: a, width: b - a });
   }
 
-  const net = -(avBps + vaBps);
+  const net = -(avBps + hedgeBps);
   const raw = 50 + (net / scale) * 50;
   if (raw > 100) over = "right";
   if (raw < 0) over = "left";
@@ -106,7 +115,7 @@ function barScale(mags: number[]): number {
   return Math.max(sorted[Math.floor((sorted.length - 1) * 0.9)], 1e-6);
 }
 
-/** Avantis volume spans zero to nine figures, so the meter is log-scaled. */
+/** Venue volume spans zero to nine figures, so the meter is log-scaled. */
 const VOL_FLOOR_USD = 1_000;
 
 function volMeter(v: number, max: number): number {
@@ -154,6 +163,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
     dir: "desc",
   });
   const [klass, setKlass] = useState<AssetClass | "all">("all");
+  const [venue, setVenue] = useState<HedgeVenueId | "all">("all");
 
   const all = useMemo<Row[]>(
     () =>
@@ -163,7 +173,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
           o,
           rank: i + 1,
           avBps: anchor.dailyPct * 100,
-          vaBps: hedge.dailyPct * 100,
+          hedgeBps: hedge.dailyPct * 100,
         };
       }),
     [rows],
@@ -177,8 +187,22 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
     );
   }, [all]);
 
+  const venueCounts = useMemo(() => {
+    const counts = new Map<HedgeVenueId, number>();
+    for (const r of all) {
+      counts.set(r.o.hedgeVenue, (counts.get(r.o.hedgeVenue) ?? 0) + 1);
+    }
+    return HEDGE_VENUES.filter((v) => counts.has(v)).map(
+      (v) => [v, counts.get(v) as number] as const,
+    );
+  }, [all]);
+
   const visible = useMemo(() => {
-    const kept = all.filter((r) => klass === "all" || r.o.klass === klass);
+    const kept = all.filter(
+      (r) =>
+        (klass === "all" || r.o.klass === klass) &&
+        (venue === "all" || r.o.hedgeVenue === venue),
+    );
     const value = VALUE[sort.key];
     const flip = sort.dir === "asc" ? 1 : -1;
     return [...kept].sort((a, b) => {
@@ -189,20 +213,26 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
       }
       return (x - y) * flip;
     });
-  }, [all, klass, sort]);
+  }, [all, klass, venue, sort]);
 
   const scale = useMemo(
     () =>
       barScale(
         visible.map((r) =>
-          Math.max(Math.abs(r.avBps), Math.abs(r.vaBps), Math.abs(r.o.netCarryBps)),
+          Math.max(Math.abs(r.avBps), Math.abs(r.hedgeBps), Math.abs(r.o.netCarryBps)),
         ),
       ),
     [visible],
   );
 
+  // One scale across both volume columns, so the two meters can be read
+  // against each other to see which leg is the binding constraint.
   const maxVol = useMemo(
-    () => visible.reduce((m, r) => Math.max(m, r.o.volume24hUsd), VOL_FLOOR_USD * 10),
+    () =>
+      visible.reduce(
+        (m, r) => Math.max(m, r.o.volume24hUsd, r.o.hedgeVolume24hUsd),
+        VOL_FLOOR_USD * 10,
+      ),
     [visible],
   );
 
@@ -241,6 +271,32 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
         </div>
       </div>
 
+      {venueCounts.length > 1 && (
+        <div className="controls">
+          <span className="ctl-label">Hedge</span>
+          <div className="chips">
+            <button
+              className="chip-btn"
+              aria-pressed={venue === "all"}
+              onClick={() => setVenue("all")}
+            >
+              All<span className="count">{all.length}</span>
+            </button>
+            {venueCounts.map(([v, n]) => (
+              <button
+                key={v}
+                className="chip-btn"
+                aria-pressed={venue === v}
+                onClick={() => setVenue(v)}
+              >
+                {VENUE_LABEL[v]}
+                <span className="count">{n}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <div className="empty">Nothing matches this filter — try clearing it.</div>
       ) : (
@@ -253,7 +309,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                 <Header
                   label="The trade"
                   sortKey="trade"
-                  title="Which side of the pair Avantis sits on."
+                  title="Which venue takes the far side, and which way round Avantis sits."
                   {...head}
                 />
                 <Header
@@ -264,9 +320,9 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                   {...head}
                 />
                 <Header
-                  label="Variational leg"
-                  sortKey="va"
-                  className="num va"
+                  label="Hedge leg"
+                  sortKey="hedge"
+                  className="num hedge"
                   title="Funding on the hedge leg, bps of notional per day. Negative means you receive."
                   {...head}
                 />
@@ -280,6 +336,13 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                 <Header label="Net APR" sortKey="apr" className="num key" {...head} />
                 <Header label="Avantis 24h vol" sortKey="vol" className="num" {...head} />
                 <Header
+                  label="Hedge 24h vol"
+                  sortKey="hvol"
+                  className="num"
+                  title="Volume on the venue taking the far side. The thinner of the two legs caps the pair."
+                  {...head}
+                />
+                <Header
                   label="OI cap used"
                   sortKey="oi"
                   className="num"
@@ -290,8 +353,9 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
             </thead>
             <tbody>
               {visible.map((r) => {
-                const { o, avBps, vaBps } = r;
-                const { segs, tick, over } = balance(avBps, vaBps, scale);
+                const { o, avBps, hedgeBps } = r;
+                const hedgeTone = venueTone(o.hedgeVenue);
+                const { segs, tick, over } = balance(avBps, hedgeBps, hedgeTone, scale);
                 const hedgeSide = o.anchorSide === "long" ? "short" : "long";
                 return (
                   <tr key={o.asset} className={r.rank === 1 ? "lead-row" : ""}>
@@ -316,18 +380,21 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                         </span>
                         <span className="row">
                           <span className={`s ${hedgeSide}`}>{hedgeSide}</span>
-                          <Venue venue="variational" />
+                          <Venue venue={o.hedgeVenue} />
                         </span>
                       </span>
                     </td>
                     <td className="num av-num">{bps(avBps, 2)}</td>
-                    <td className="num va-num">{bps(vaBps, 2)}</td>
+                    <td className={`num ${hedgeTone}-num`}>{bps(hedgeBps, 2)}</td>
                     <td className="balance">
                       <div
                         className="bar"
-                        title={`Avantis costs ${bps(avBps, 2)}, Variational ${
-                          vaBps < 0 ? "pays" : "costs"
-                        } ${bps(Math.abs(vaBps), 2)} — net ${bps(o.netCarryBps, 2)} bps/day${
+                        title={`Avantis costs ${bps(avBps, 2)}, ${
+                          VENUE_LABEL[o.hedgeVenue]
+                        } ${hedgeBps < 0 ? "pays" : "costs"} ${bps(
+                          Math.abs(hedgeBps),
+                          2,
+                        )} — net ${bps(o.netCarryBps, 2)} bps/day${
                           over ? ", off the scale of this column" : ""
                         }`}
                       >
@@ -360,6 +427,16 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                       </span>
                     </td>
                     <td className="num">
+                      <span className="dim">{usd(o.hedgeVolume24hUsd)}</span>
+                      <span className="meter" aria-hidden>
+                        <i
+                          style={{
+                            width: `${volMeter(o.hedgeVolume24hUsd, maxVol) * 100}%`,
+                          }}
+                        />
+                      </span>
+                    </td>
+                    <td className="num">
                       <span className="dim">{share(o.avantisOiUtil, 1)}</span>
                       <span
                         className={`meter ${o.avantisOiUtil > 0.85 ? "warn" : ""}`}
@@ -384,9 +461,11 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
         <span>
           <i className="av" aria-hidden /> Avantis cost
         </span>
-        <span>
-          <i className="va" aria-hidden /> Variational funding
-        </span>
+        {venueCounts.map(([v]) => (
+          <span key={v}>
+            <i className={venueTone(v)} aria-hidden /> {VENUE_LABEL[v]} funding
+          </span>
+        ))}
         <span>
           <i className="net" aria-hidden /> Net
         </span>

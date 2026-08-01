@@ -2,7 +2,7 @@
   "name": "funding-charge-v2",
   "version": "1.0.0",
   "private": true,
-  "description": "Avantis/Variational funding carry scanner",
+  "description": "Avantis-anchored funding carry scanner across Variational and Ondo Perps",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -1,19 +1,25 @@
+import { CLASS_LABEL, hedgeTickerFor, matchCaveatFor } from "@/lib/symbols";
 import {
-  CLASS_LABEL,
-  MATCH_CAVEATS,
-  variationalTickerFor,
-} from "@/lib/symbols";
-import {
+  HEDGE_VENUES,
+  VENUE_LABEL,
   type AvantisMarket,
   type Blocked,
+  type HedgeMarket,
+  type HedgeVenueId,
   type Opportunity,
   type ScanResult,
   type Side,
-  type VariationalMarket,
   type VenueId,
 } from "@/lib/types";
 import { fetchAvantisMarkets } from "@/lib/venues/avantis";
+import { fetchOndoMarkets } from "@/lib/venues/ondo";
 import { fetchVariationalMarkets } from "@/lib/venues/variational";
+
+/** How to load each hedge venue. Order here is the order shown in the UI. */
+const HEDGE_FETCHERS: Record<HedgeVenueId, () => Promise<Map<string, HedgeMarket>>> = {
+  variational: fetchVariationalMarkets,
+  ondo: fetchOndoMarkets,
+};
 
 /**
  * Net carry for one ordered pair, in basis points of notional per day.
@@ -28,21 +34,23 @@ export function netCarryBps(longLegDailyPct: number, shortLegDailyPct: number): 
 
 export const aprFromBps = (bps: number): number => (bps * 365) / 100;
 
+type PairCore = Pick<
+  Opportunity,
+  "asset" | "long" | "short" | "anchorSide" | "hedgeVenue" | "netCarryBps" | "carryAprPct"
+>;
+
 /**
  * Build the two Avantis-anchored candidates for one asset and keep the better.
  *
  * Avantis is a borrow-fee venue, so both of its sides are positive and it can
- * never be the leg that earns. Positive carry therefore requires Variational
- * to pay more than the Avantis borrow fee costs.
+ * never be the leg that earns. Positive carry therefore requires the hedge to
+ * pay more than the Avantis borrow fee costs.
  */
-export function bestPair(
-  anchor: AvantisMarket,
-  hedge: VariationalMarket,
-): Omit<Opportunity, "label" | "klass" | "volume24hUsd" | "avantisOiUtil" | "caveat"> {
+export function bestPair(anchor: AvantisMarket, hedge: HedgeMarket): PairCore {
   const candidates: Array<{ anchorSide: Side; longPct: number; shortPct: number }> = [
-    // Long Avantis, short Variational.
+    // Long Avantis, short the hedge.
     { anchorSide: "long", longPct: anchor.longDailyPct, shortPct: hedge.shortDailyPct },
-    // Long Variational, short Avantis.
+    // Long the hedge, short Avantis.
     { anchorSide: "short", longPct: hedge.longDailyPct, shortPct: anchor.shortDailyPct },
   ];
 
@@ -62,39 +70,84 @@ export function bestPair(
   return {
     asset: anchor.asset,
     long: {
-      venue: anchorIsLong ? "avantis" : "variational",
+      venue: anchorIsLong ? "avantis" : hedge.venue,
       side: "long",
       dailyPct: best.longPct,
     },
     short: {
-      venue: anchorIsLong ? "variational" : "avantis",
+      venue: anchorIsLong ? hedge.venue : "avantis",
       side: "short",
       dailyPct: best.shortPct,
     },
     anchorSide: best.anchorSide,
+    hedgeVenue: hedge.venue,
     netCarryBps: bestBps,
     carryAprPct: aprFromBps(bestBps),
   };
 }
 
+/**
+ * The best pair across every hedge venue that quotes this asset.
+ *
+ * Ties go to the deeper venue: two venues at the same rate are not the same
+ * trade if only one of them can absorb the size.
+ */
+export function bestAcrossHedges(
+  anchor: AvantisMarket,
+  hedges: HedgeMarket[],
+): { core: PairCore; hedge: HedgeMarket } | null {
+  let winner: { core: PairCore; hedge: HedgeMarket } | null = null;
+
+  for (const hedge of hedges) {
+    const core = bestPair(anchor, hedge);
+    if (
+      !winner ||
+      core.netCarryBps > winner.core.netCarryBps ||
+      (core.netCarryBps === winner.core.netCarryBps &&
+        hedge.volume24hUsd > winner.hedge.volume24hUsd)
+    ) {
+      winner = { core, hedge };
+    }
+  }
+
+  return winner;
+}
+
+type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
+
+async function settle<T>(p: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await p };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+const listNames = (venues: HedgeVenueId[]): string =>
+  venues.map((v) => VENUE_LABEL[v]).join(" and ");
+
 export async function scan(): Promise<ScanResult> {
-  const [avRes, vaRes] = await Promise.allSettled([
-    fetchAvantisMarkets(),
-    fetchVariationalMarkets(),
+  const [avantisRes, hedgeResults] = await Promise.all([
+    settle(fetchAvantisMarkets()),
+    Promise.all(
+      HEDGE_VENUES.map(async (id) => ({ id, res: await settle(HEDGE_FETCHERS[id]()) })),
+    ),
   ]);
 
   const venueErrors: Partial<Record<VenueId, string>> = {};
 
-  const avantis =
-    avRes.status === "fulfilled" ? avRes.value : new Map<string, AvantisMarket>();
-  if (avRes.status === "rejected") {
-    venueErrors.avantis = String(avRes.reason?.message ?? avRes.reason);
-  }
+  const avantis = avantisRes.ok ? avantisRes.value : new Map<string, AvantisMarket>();
+  if (!avantisRes.ok) venueErrors.avantis = avantisRes.error;
 
-  const variational =
-    vaRes.status === "fulfilled" ? vaRes.value : new Map<string, VariationalMarket>();
-  if (vaRes.status === "rejected") {
-    venueErrors.variational = String(vaRes.reason?.message ?? vaRes.reason);
+  const hedgeBooks: Array<{ id: HedgeVenueId; markets: Map<string, HedgeMarket> }> = [];
+  const hedgeCounts: Partial<Record<HedgeVenueId, number>> = {};
+  for (const { id, res } of hedgeResults) {
+    if (res.ok) {
+      hedgeBooks.push({ id, markets: res.value });
+      hedgeCounts[id] = res.value.size;
+    } else {
+      venueErrors[id] = res.error;
+    }
   }
 
   const opportunities: Opportunity[] = [];
@@ -102,21 +155,31 @@ export async function scan(): Promise<ScanResult> {
   let matched = 0;
 
   for (const anchor of avantis.values()) {
-    const hedge = variational.get(variationalTickerFor(anchor.asset).toUpperCase());
-    const label = hedge?.name ?? anchor.asset;
+    const listings = hedgeBooks.flatMap(({ id, markets }) => {
+      const market = markets.get(hedgeTickerFor(id, anchor.asset));
+      return market ? [market] : [];
+    });
 
-    if (!hedge) {
+    if (listings.length === 0) {
       blocked.push({
         asset: anchor.asset,
         label: anchor.asset,
         klass: anchor.klass,
-        reason: "not_listed_variational",
-        detail: `Avantis lists it as ${CLASS_LABEL[anchor.klass]}, Variational has no matching market`,
+        reason: "not_listed_hedge",
+        detail: `Avantis lists it as ${CLASS_LABEL[anchor.klass]}, no matching market on ${listNames(
+          hedgeBooks.map((h) => h.id),
+        )}`,
       });
       continue;
     }
 
     matched += 1;
+
+    // Label from the deepest venue that quotes it, so the name survives even
+    // when the pair itself is withheld.
+    const label =
+      [...listings].sort((a, b) => b.volume24hUsd - a.volume24hUsd)[0]?.name ??
+      anchor.asset;
 
     if (!anchor.isOpen) {
       blocked.push({
@@ -128,29 +191,38 @@ export async function scan(): Promise<ScanResult> {
       });
       continue;
     }
-    if (hedge.stale) {
+
+    const live = listings.filter((m) => !m.stale);
+    if (live.length === 0) {
       blocked.push({
         asset: anchor.asset,
         label,
         klass: anchor.klass,
         reason: "hedge_closed",
-        detail: "Variational funding is exactly zero, meaning the market is shut",
+        detail: `Funding is exactly zero on ${listNames(
+          listings.map((m) => m.venue),
+        )}, meaning the market is shut or the rate was voided`,
       });
       continue;
     }
+
+    const winner = bestAcrossHedges(anchor, live);
+    if (!winner) continue;
+
     const opp: Opportunity = {
-      ...bestPair(anchor, hedge),
-      label,
+      ...winner.core,
+      label: winner.hedge.name,
       klass: anchor.klass,
       volume24hUsd: anchor.volume24hUsd,
+      hedgeVolume24hUsd: winner.hedge.volume24hUsd,
       avantisOiUtil:
         anchor.maxOpenInterestUsd > 0
           ? anchor.openInterestUsd / anchor.maxOpenInterestUsd
           : 0,
-      caveat: MATCH_CAVEATS[anchor.asset],
+      caveat: matchCaveatFor(winner.hedge.venue, anchor.asset),
     };
 
-    // Both Avantis directions cost more than Variational pays, so there is no
+    // Every Avantis direction costs more than any hedge pays, so there is no
     // trade here — only the inverse, which the anchor rule does not allow.
     if (opp.netCarryBps <= 0) {
       blocked.push({
@@ -158,7 +230,9 @@ export async function scan(): Promise<ScanResult> {
         label,
         klass: anchor.klass,
         reason: "no_edge",
-        detail: `Better direction still costs ${(-opp.netCarryBps).toFixed(2)} bp a day`,
+        detail: `Best of ${live.length} hedge${
+          live.length === 1 ? "" : "s"
+        } still costs ${(-opp.netCarryBps).toFixed(2)} bp a day`,
       });
       continue;
     }
@@ -180,7 +254,7 @@ export async function scan(): Promise<ScanResult> {
     blocked,
     counts: {
       avantisMarkets: avantis.size,
-      variationalMarkets: variational.size,
+      hedgeMarkets: hedgeCounts,
       matched,
     },
     venueErrors,
