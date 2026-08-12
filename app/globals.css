@@ -49,6 +49,12 @@
   --on-wash: rgba(8, 145, 178, 0.08);
   --on-bar: #06a5c9;
 
+  /* GRVT — amber */
+  --gr: #ca8a04;
+  --gr-ink: #8a5f03;
+  --gr-wash: rgba(202, 138, 4, 0.08);
+  --gr-bar: #e0a106;
+
   --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Courier New", monospace;
@@ -235,6 +241,10 @@ h1 {
 
 .venue.on {
   color: var(--on-ink);
+}
+
+.venue.gr {
+  color: var(--gr-ink);
 }
 
 /* ── Sections ─────────────────────────────────────────── */
@@ -589,6 +599,10 @@ th.num {
   color: var(--on-ink);
 }
 
+.gr-num {
+  color: var(--gr-ink);
+}
+
 /* ── Direction cell ───────────────────────────────────── */
 
 .direction {
@@ -669,6 +683,11 @@ th.num {
   opacity: 0.9;
 }
 
+.bar .seg.gr {
+  background: var(--gr-bar);
+  opacity: 0.9;
+}
+
 .bar .tick {
   position: absolute;
   top: -4px;
@@ -739,6 +758,11 @@ th.num {
 
 .bar-key i.on {
   background: var(--on-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.gr {
+  background: var(--gr-bar);
   opacity: 0.9;
 }
 

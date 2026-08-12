@@ -1,16 +1,18 @@
 import { VENUE_LABEL, type VenueId } from "@/lib/types";
 
-/** Avantis violet, Variational blue, Ondo teal. */
+/** Avantis violet, Variational blue, Ondo teal, GRVT amber. */
 const TONE: Record<VenueId, string> = {
   avantis: "av",
   variational: "va",
   ondo: "on",
+  grvt: "gr",
 };
 
 const ICON: Record<VenueId, string> = {
   avantis: "/venues/avantis.png",
   variational: "/venues/variational.png",
   ondo: "/venues/ondo.svg",
+  grvt: "/venues/grvt.png",
 };
 
 /**

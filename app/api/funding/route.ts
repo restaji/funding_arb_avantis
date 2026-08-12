@@ -9,6 +9,7 @@ import {
   type VenueId,
 } from "@/lib/types";
 import { fetchAvantisMarkets } from "@/lib/venues/avantis";
+import { fetchGrvtMarkets } from "@/lib/venues/grvt";
 import { fetchOndoMarkets } from "@/lib/venues/ondo";
 import { fetchVariationalMarkets } from "@/lib/venues/variational";
 
@@ -18,6 +19,7 @@ export const maxDuration = 30;
 const HEDGE_FETCHERS: Record<HedgeVenueId, () => Promise<Map<string, HedgeMarket>>> = {
   variational: fetchVariationalMarkets,
   ondo: fetchOndoMarkets,
+  grvt: fetchGrvtMarkets,
 };
 
 /**

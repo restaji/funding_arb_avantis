@@ -86,6 +86,13 @@ export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
     BRENTV6: "BRENT",
     GOOG: "GOOGL",
   },
+  grvt: {
+    WTIU6: "CL",
+    WTIM6: "CL",
+    BRENTV6: "BZ",
+    GOOG: "GOOGL",
+    BB: "BBX",
+  },
 };
 
 /**
@@ -105,6 +112,12 @@ export const MATCH_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
     WTIM6: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
     WTIU6: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
     BRENTV6: "Avantis prices a specific Brent futures expiry, Ondo quotes generic Brent",
+  },
+  grvt: {
+    GOOG: "Avantis lists Alphabet Class C, GRVT lists Class A (GOOGL) — near but not identical",
+    WTIM6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
+    WTIU6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
+    BRENTV6: "Avantis prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
   },
 };
 
