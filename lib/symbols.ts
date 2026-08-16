@@ -67,6 +67,10 @@ export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | n
  * It quotes generic WTI and Brent rather than a dated contract, and carries
  * SPY and QQQ under their own tickers, so SPY needs no redirect the way it
  * does on Variational. Ondo's US500 is the index, not the ETF.
+ *
+ * Pacifica: kBONK/kPEPE/kSHIB are the same 1000x denomination as Variational.
+ * SKHY is Avantis's truncated ticker for SK Hynix; Pacifica lists SKHYNIX.
+ * Pacifica's SP500 is the index (~7800), not the SPY ETF — do not redirect.
  */
 export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
   variational: {
@@ -93,6 +97,15 @@ export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
     GOOG: "GOOGL",
     BB: "BBX",
   },
+  pacifica: {
+    WTIU6: "CL",
+    WTIM6: "CL",
+    GOOG: "GOOGL",
+    BONK: "kBONK",
+    PEPE: "kPEPE",
+    SHIB: "kSHIB",
+    SKHY: "SKHYNIX",
+  },
 };
 
 /**
@@ -118,6 +131,11 @@ export const MATCH_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
     WTIM6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
     WTIU6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
     BRENTV6: "Avantis prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
+  },
+  pacifica: {
+    GOOG: "Avantis lists Alphabet Class C, Pacifica lists Class A (GOOGL) — near but not identical",
+    WTIM6: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
+    WTIU6: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
   },
 };
 

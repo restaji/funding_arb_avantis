@@ -1,6 +1,6 @@
 import type { AssetClass } from "@/lib/symbols";
 
-export type VenueId = "avantis" | "variational" | "ondo" | "grvt";
+export type VenueId = "avantis" | "variational" | "ondo" | "grvt" | "pacifica";
 export type Side = "long" | "short";
 
 /** Avantis must sit on exactly one leg of every candidate pair. */
@@ -12,7 +12,7 @@ export const ANCHOR_VENUE: VenueId = "avantis";
  * Every asset is scored against all of them and only the best-paying pair
  * survives, so adding a venue here can only improve a row, never remove one.
  */
-export const HEDGE_VENUES = ["variational", "ondo", "grvt"] as const;
+export const HEDGE_VENUES = ["variational", "ondo", "grvt", "pacifica"] as const;
 export type HedgeVenueId = (typeof HEDGE_VENUES)[number];
 
 export const VENUE_LABEL: Record<VenueId, string> = {
@@ -20,6 +20,7 @@ export const VENUE_LABEL: Record<VenueId, string> = {
   variational: "Variational",
   ondo: "Ondo Perps",
   grvt: "GRVT",
+  pacifica: "Pacifica",
 };
 
 /**

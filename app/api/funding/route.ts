@@ -11,6 +11,7 @@ import {
 import { fetchAvantisMarkets } from "@/lib/venues/avantis";
 import { fetchGrvtMarkets } from "@/lib/venues/grvt";
 import { fetchOndoMarkets } from "@/lib/venues/ondo";
+import { fetchPacificaMarkets } from "@/lib/venues/pacifica";
 import { fetchVariationalMarkets } from "@/lib/venues/variational";
 
 export const revalidate = 120;
@@ -20,6 +21,7 @@ const HEDGE_FETCHERS: Record<HedgeVenueId, () => Promise<Map<string, HedgeMarket
   variational: fetchVariationalMarkets,
   ondo: fetchOndoMarkets,
   grvt: fetchGrvtMarkets,
+  pacifica: fetchPacificaMarkets,
 };
 
 /**

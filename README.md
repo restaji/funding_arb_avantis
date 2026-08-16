@@ -1,7 +1,8 @@
-# Avantis × Variational or Ondo — Funding Carry
+# Avantis × Variational, Ondo, GRVT or Pacifica — Funding Carry
 
 A Vercel-deployable scanner for delta-neutral funding carry between **Avantis** and a hedge
-venue — currently **Variational** or **Ondo Perps** — across every market they have in common.
+venue — currently **Variational**, **Ondo Perps**, **GRVT** or **Pacifica** — across every
+market they have in common.
 
 Every pair is Avantis-anchored: Avantis sits on one leg, a hedge venue on the other. Each
 asset is scored against every hedge venue that quotes it and only the best-paying pair
@@ -23,7 +24,7 @@ netCarry > 0   ⟺   hedgeRate < -avantisRate
 The hedge has to out-earn the Avantis fee on its own. Avantis never generates edge here —
 it is the position being financed, and the app's job is to find where financing it is cheap.
 
-That fee starts at **15% a year** and runs to 100%, while both hedge venues sit at the same
+That fee starts at **15% a year** and runs to 100%, while the hedge venues sit at the same
 10.95% baseline when their perp is on the oracle. So the honest expectation is a nearly empty
 board: a pair only appears when hedge funding is strongly negative against a low-fee Avantis
 pair. Two or three candidates is a normal day, not a bug.
@@ -35,9 +36,10 @@ Avantis publishes a Pyth-style symbol on every pair (`feed.attributes.symbol`, e
 venues, of the intersection with the Avantis book. New markets on any side appear with no
 code change.
 
-Roughly **110 Avantis markets against 520 Variational listings and 37 Ondo listings → ~90
-matched**, spanning crypto, US equities, commodities and metals. Avantis FX has no
-counterpart on either hedge venue, so those ~15 pairs are permanently unhedgeable here.
+Roughly **110 Avantis markets against 520 Variational listings, 37 Ondo, ~170 GRVT and 75
+Pacifica → ~90 matched**, spanning crypto, US equities, commodities, metals and (via
+Pacifica) two FX pairs. Avantis FX had no counterpart until Pacifica listed `EURUSD` and
+`USDJPY`; the rest of the FX book is still unhedgeable here.
 
 Ondo overlaps Avantis on 28 tickers by exact name, and overrides pick up `WTI`, `BRENT` and
 `GOOGL` on top, so 31 of Ondo's 37 markets are hedgeable. Its remaining six — `US500`,
@@ -49,20 +51,25 @@ including every one of Ondo's 31, so Ondo adds no row that did not exist before 
 competes on rate for rows Variational was already covering. Its value is entirely in winning
 those head-to-head, and in staying quoted when Variational zeroes out.
 
+**Pacifica does.** It is the only hedge that lists SK Hynix (`SKHY` → `SKHYNIX`) and the only
+one that covers any Avantis FX (`EURUSD`, `USDJPY`). `kBONK` / `kPEPE` / `kSHIB` overlap
+Variational's 1000x book.
+
 Only genuine naming disagreements need an entry in `HEDGE_OVERRIDES`, which is keyed by
 venue because the two disagree with Avantis in different places:
 
-| Avantis | Variational | Ondo | Why |
-|---|---|---|---|
-| `BONK`, `PEPE` | `1000BONK`, `1000PEPE` | — | 1000x contract denomination. Funding is a percentage of notional, so the rate is unaffected and the match is exact. |
-| `SPY` | `US500` | `SPY` | Despite the ticker, Variational's `US500` is the SPDR S&P 500 ETF itself, marked ~742 like the ETF. Not to be confused with Variational's `SPX`, which is **SPX6900, a memecoin**. Ondo lists the ETF under its own ticker and keeps `US500` for the index. |
-| `BB` | `BBX` | `BB` | BlackBerry. Variational suffixes the ticker. |
-| `WTIU6`, `WTIM6`, `BRENTV6` | `CL`, `BZ` | `WTI`, `BRENT` | Avantis prices dated futures expiries; both hedge venues quote generic crude. |
-| `PUMP` | `PUMPFUN` | — | Same token. |
-| `GOOG` | `GOOGL` | `GOOGL` | **Different share class.** Near-identical price, but not the same instrument. |
+| Avantis | Variational | Ondo | Pacifica | Why |
+|---|---|---|---|---|
+| `BONK`, `PEPE`, `SHIB` | `1000BONK`, `1000PEPE` | — | `kBONK`, `kPEPE`, `kSHIB` | 1000x contract denomination. Funding is a percentage of notional, so the rate is unaffected and the match is exact. |
+| `SKHY` | — | — | `SKHYNIX` | Same name, truncated ticker on Avantis. |
+| `SPY` | `US500` | `SPY` | — | Despite the ticker, Variational's `US500` is the SPDR S&P 500 ETF itself, marked ~742 like the ETF. Not to be confused with Variational's `SPX`, which is **SPX6900, a memecoin**. Ondo lists the ETF under its own ticker. Pacifica's `SP500` is the index, not the ETF, so it is left unmatched. |
+| `BB` | `BBX` | `BB` | — | BlackBerry. Variational suffixes the ticker. |
+| `WTIU6`, `WTIM6`, `BRENTV6` | `CL`, `BZ` | `WTI`, `BRENT` | `CL` (WTI only) | Avantis prices dated futures expiries; hedge venues quote generic crude. Pacifica has no Brent. |
+| `PUMP` | `PUMPFUN` | — | `PUMP` | Same token. |
+| `GOOG` | `GOOGL` | `GOOGL` | `GOOGL` | **Different share class.** Near-identical price, but not the same instrument. |
 
-The last two rows are flagged in the UI via `MATCH_CAVEATS` rather than silently treated as
-exact.
+The GOOG and dated-crude rows are flagged in the UI via `MATCH_CAVEATS` rather than
+silently treated as exact. `SKHY`/`SKHYNIX` is the same name, so it is not.
 
 ## Three gates
 
@@ -127,7 +134,7 @@ unauthenticated.
 
 ## Data sources
 
-Five unauthenticated batch calls per scan, each returning every market on the venue:
+Unauthenticated batch calls per scan, each returning every market on the venue:
 
 | Venue | Endpoint | Supplies |
 |---|---|---|
@@ -136,6 +143,8 @@ Five unauthenticated batch calls per scan, each returning every market on the ve
 | Variational | `omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats` | Funding, volume, OI |
 | Ondo | `api.ondoperps.xyz/v1/perps/contracts` | Funding, volume, OI, underlying-market state |
 | Ondo | `api.ondoperps.xyz/v1/markets` | Long names only |
+| GRVT | `market-data.grvt.io/full/v1/all_instruments` + `/ticker` | Funding, volume, OI |
+| Pacifica | `api.pacifica.fi/api/v1/info/prices` | Funding, volume, OI |
 
 The Avantis socket-api feed carries no volume at all, hence the second Avantis call. It is
 joined on `pairIndex`, and a pair missing from its payload traded nothing — which is the
@@ -154,10 +163,11 @@ impersonation, but `omni-client-api.prod...` answers a plain `fetch`. Ondo has n
 | Avantis | `marginFee.{long,short}` | percent / hour | `× 24` |
 | Variational | `funding_rate` | **annualized fraction** | `× 100 / 365` |
 | Ondo | `nextFundingRate` | fraction / hour | `× 24 × 100` |
+| Pacifica | `next_funding` | fraction / hour | `× 24 × 100` |
 
 Sign convention everywhere: **positive means the trader pays.**
 
-All three units are pinned by round numbers in the feeds rather than by documentation alone:
+These units are pinned by round numbers in the feeds rather than by documentation alone:
 
 - Avantis `marginFee` × 24 × 365 lands exactly on `storagePairParams.minBorrowFee` /
   `maxBorrowFee`, which are the 15%–100% APR bounds. BTC sits at the 15% floor.
@@ -171,6 +181,11 @@ All three units are pinned by round numbers in the feeds rather than by document
   market resting on its oracle prints exactly `0.0000125`, which is the same 0.03%/day
   interest baseline, and the Ondo UI shows that market's rate as `0.00125%` with a countdown
   to the top of the hour.
+- Pacifica is the same hourly fraction, same `0.0000125` oracle print, same 0.03%/day
+  baseline. The published formula is `(premium + clamp(0.01% − premium, ±0.05%)) / 8`.
+  `next_funding` is the TWAP the UI shows for the hour now running; `funding` is the hour
+  that already settled. Open interest in that payload is in base units despite the docs
+  saying USD, so the adapter multiplies by mark.
 
 `funding_interval_s` is therefore the settlement cadence only. Scaling by it overstates
 funding by 10.95× on 8h markets and 21.9× on 4h ones, which does not merely inflate the
@@ -179,13 +194,14 @@ APRs, it reorders the board.
 Ondo's rate already carries the venue's /8 premium smoothing, so it must not be divided
 again: the published number is the amount that actually changes hands this hour.
 
-### Ondo prices funding through a closed underlying
+### Ondo and Pacifica price funding through a closed underlying
 
-Ondo trades 24/7 and keeps charging funding when the underlying cash market is shut, deriving
-the premium from its own orderbook instead of an oracle — which its docs warn can produce a
-much larger rate. `isClosed` records this, and it is deliberately **not** a gate, because the
-Avantis calendar has already withheld the pair by the time it matters. It is worth
-re-sampling rates during US cash hours before treating a weekend print as representative.
+Ondo and Pacifica both trade 24/7 and keep charging funding when the underlying cash market
+is shut, deriving the premium from their own books instead of an oracle — which can produce
+a much larger rate. Ondo records this as `isClosed`; Pacifica does not flag it. Neither is a
+gate, because the Avantis calendar has already withheld the pair by the time it matters. It
+is worth re-sampling rates during US cash hours before treating a weekend print as
+representative.
 
 ## Not modelled
 
@@ -217,6 +233,8 @@ lib/
   venues/avantisVolume.ts  24h volume by pair index
   venues/variational.ts    hedge adapter (all listings)
   venues/ondo.ts           hedge adapter (all contracts)
+  venues/grvt.ts           hedge adapter (all perps)
+  venues/pacifica.ts       hedge adapter (all perps)
 components/
   LeadCard.tsx             top-ranked pair, both legs spelled out
   OpportunityTable.tsx     ranked table: sort, class/venue filters, cost-vs-earn bar
@@ -225,9 +243,9 @@ components/
   RefreshButton.tsx
 ```
 
-Three colours carry venue identity and are used for nothing else: **Avantis violet**,
-**Variational blue**, **Ondo teal**. Sign is carried separately by green (earn) and red
-(pay), so a row never has to be decoded twice. The `Cost vs earn` column draws the Avantis
+Venue identity is carried by colour and used for nothing else: **Avantis violet**,
+**Variational blue**, **Ondo teal**, **GRVT amber**, **Pacifica sky**. Sign is carried
+separately by green (earn) and red (pay), so a row never has to be decoded twice. The `Cost vs earn` column draws the Avantis
 fee left of a zero axis and the hedge funding right of it in that hedge's own colour, with a
 tick at the net — a pair pays exactly when its tick sits right of the axis. The hedge column
 header itself is left neutral, since the column is shared.

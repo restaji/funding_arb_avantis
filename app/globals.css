@@ -1,11 +1,13 @@
 /* =========================================================
-   Avantis × Variational funding carry — Editorial Terminal
+   Avantis × hedge-venue funding carry — Editorial Terminal
    Cream paper · ink-black type · serif display · hard edges
 
-   Venue identity is carried by exactly two colours and they are
-   never used for anything else:
+   Venue identity is carried by colour and used for nothing else:
      Avantis     violet   — the anchor leg, always a cost
-     Variational blue     — the hedge leg, the only source of edge
+     Variational blue
+     Ondo        teal
+     GRVT        amber
+     Pacifica    sky
    Sign is carried by green (earn) / red (pay).
    ========================================================= */
 
@@ -54,6 +56,12 @@
   --gr-ink: #8a5f03;
   --gr-wash: rgba(202, 138, 4, 0.08);
   --gr-bar: #e0a106;
+
+  /* Pacifica — sky */
+  --pa: #0284c7;
+  --pa-ink: #075985;
+  --pa-wash: rgba(2, 132, 199, 0.08);
+  --pa-bar: #38bdf8;
 
   --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -245,6 +253,10 @@ h1 {
 
 .venue.gr {
   color: var(--gr-ink);
+}
+
+.venue.pa {
+  color: var(--pa-ink);
 }
 
 /* ── Sections ─────────────────────────────────────────── */
@@ -603,6 +615,10 @@ th.num {
   color: var(--gr-ink);
 }
 
+.pa-num {
+  color: var(--pa-ink);
+}
+
 /* ── Direction cell ───────────────────────────────────── */
 
 .direction {
@@ -688,6 +704,11 @@ th.num {
   opacity: 0.9;
 }
 
+.bar .seg.pa {
+  background: var(--pa-bar);
+  opacity: 0.9;
+}
+
 .bar .tick {
   position: absolute;
   top: -4px;
@@ -763,6 +784,11 @@ th.num {
 
 .bar-key i.gr {
   background: var(--gr-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.pa {
+  background: var(--pa-bar);
   opacity: 0.9;
 }
 
