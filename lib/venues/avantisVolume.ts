@@ -17,9 +17,11 @@ const num = (v: unknown): number => {
 /**
  * Avantis traded notional over the last day, keyed by pair index.
  *
- * The socket-api feed carries funding and open interest but no volume, so this
- * is a second call. Pairs that did not trade are omitted from the payload
- * rather than reported as zero, so a missing key means no flow.
+ * Same endpoint the Avantis trade UI calls for "24h Volume"
+ * (`/history/analytics/daily-volumes-by-pair/1/true`). data.avantisfi.com/v2/trading
+ * has no 24h volume field. Pairs that did not trade are omitted rather than
+ * reported as zero, so a missing key means no flow. `_UPSIDE` siblings are
+ * folded into the underlying pair by the caller.
  */
 export async function fetchAvantisVolumes(): Promise<Map<number, number>> {
   const res = await fetch(VOLUME_API, {

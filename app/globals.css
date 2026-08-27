@@ -824,6 +824,40 @@ th.num {
   background: var(--pay);
 }
 
+.meter.skew {
+  display: flex;
+}
+
+.meter.skew > i {
+  width: auto;
+  min-width: 0;
+}
+
+.meter.skew > i.long {
+  background: var(--earn);
+}
+
+.meter.skew > i.short {
+  background: var(--pay);
+}
+
+.ls {
+  white-space: nowrap;
+}
+
+.ls .l {
+  color: var(--earn);
+}
+
+.ls .sep {
+  margin: 0 4px;
+  color: var(--ink-faint);
+}
+
+.ls .sh {
+  color: var(--pay);
+}
+
 /* ── Withheld ─────────────────────────────────────────── */
 
 .withheld {

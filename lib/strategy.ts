@@ -223,6 +223,8 @@ export async function scan(): Promise<ScanResult> {
         anchor.maxOpenInterestUsd > 0
           ? anchor.openInterestUsd / anchor.maxOpenInterestUsd
           : 0,
+      avantisLongOiUsd: anchor.longOiUsd,
+      avantisShortOiUsd: anchor.shortOiUsd,
       caveat: matchCaveatFor(winner.hedge.venue, anchor.asset),
     };
 

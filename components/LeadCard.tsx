@@ -1,5 +1,5 @@
 import { Venue, venueTone } from "@/components/Venue";
-import { bps, earnClass, pct, share, usd } from "@/lib/format";
+import { bps, earnClass, pct, usd } from "@/lib/format";
 import { CLASS_LABEL } from "@/lib/symbols";
 import {
   legsOf,
@@ -82,7 +82,9 @@ export function LeadCard({
           {usd(o.hedgeVolume24hUsd)} {VENUE_LABEL[o.hedgeVenue]} 24h volume
         </span>
         <span className="dot">·</span>
-        <span>{share(o.avantisOiUtil, 1)} of the Avantis OI cap used</span>
+        <span>
+          Long {usd(o.avantisLongOiUsd)} / short {usd(o.avantisShortOiUsd)} Avantis OI
+        </span>
         {o.caveat && (
           <>
             <span className="dot">·</span>

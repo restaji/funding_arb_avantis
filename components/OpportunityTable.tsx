@@ -47,7 +47,10 @@ const VALUE: Record<SortKey, (r: Row) => number | string> = {
   apr: (r) => r.o.carryAprPct,
   vol: (r) => r.o.volume24hUsd,
   hvol: (r) => r.o.hedgeVolume24hUsd,
-  oi: (r) => r.o.avantisOiUtil,
+  oi: (r) => {
+    const t = r.o.avantisLongOiUsd + r.o.avantisShortOiUsd;
+    return t > 0 ? r.o.avantisLongOiUsd / t : 0.5;
+  },
 };
 
 /** Ascending is the sensible default for names and rank, descending for money. */
@@ -124,6 +127,13 @@ function volMeter(v: number, max: number): number {
   const span = Math.log10(max) - floor;
   if (span <= 0) return 1;
   return Math.max(0.03, (Math.log10(v) - floor) / span);
+}
+
+function oiSplit(longUsd: number, shortUsd: number): { longPct: number; shortPct: number } {
+  const t = longUsd + shortUsd;
+  if (t <= 0) return { longPct: 0, shortPct: 0 };
+  const longPct = (longUsd / t) * 100;
+  return { longPct, shortPct: 100 - longPct };
 }
 
 function Header({
@@ -343,10 +353,10 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                   {...head}
                 />
                 <Header
-                  label="OI cap used"
+                  label="Avantis L / S"
                   sortKey="oi"
                   className="num"
-                  title="Share of the Avantis pair's open-interest cap already taken."
+                  title="Avantis long and short open interest. Sort is the long share of the pair."
                   {...head}
                 />
               </tr>
@@ -357,6 +367,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                 const hedgeTone = venueTone(o.hedgeVenue);
                 const { segs, tick, over } = balance(avBps, hedgeBps, hedgeTone, scale);
                 const hedgeSide = o.anchorSide === "long" ? "short" : "long";
+                const split = oiSplit(o.avantisLongOiUsd, o.avantisShortOiUsd);
                 return (
                   <tr key={o.asset} className={r.rank === 1 ? "lead-row" : ""}>
                     <td className="rank">{r.rank}</td>
@@ -436,17 +447,18 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                         />
                       </span>
                     </td>
-                    <td className="num">
-                      <span className="dim">{share(o.avantisOiUtil, 1)}</span>
-                      <span
-                        className={`meter ${o.avantisOiUtil > 0.85 ? "warn" : ""}`}
-                        aria-hidden
-                      >
-                        <i
-                          style={{
-                            width: `${Math.min(100, o.avantisOiUtil * 100)}%`,
-                          }}
-                        />
+                    <td
+                      className="num"
+                      title={`Long ${usd(o.avantisLongOiUsd)} · Short ${usd(o.avantisShortOiUsd)} · ${share(o.avantisOiUtil, 1)} of OI cap used`}
+                    >
+                      <span className="dim ls">
+                        <span className="l">{usd(o.avantisLongOiUsd)}</span>
+                        <span className="sep">/</span>
+                        <span className="sh">{usd(o.avantisShortOiUsd)}</span>
+                      </span>
+                      <span className="meter skew" aria-hidden>
+                        <i className="long" style={{ flex: `${split.longPct} 0 0` }} />
+                        <i className="short" style={{ flex: `${split.shortPct} 0 0` }} />
                       </span>
                     </td>
                   </tr>

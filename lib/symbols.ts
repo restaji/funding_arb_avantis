@@ -33,7 +33,7 @@ const CLASS_BY_PREFIX: Record<string, AssetClass> = {
 /**
  * "Crypto.BTC/USD"        -> { base: "BTC",     klass: "crypto" }
  * "Equity.US.SPY/USD"     -> { base: "SPY",     klass: "equity" }
- * "Commodities.WTIU6/USD" -> { base: "WTIU6",   klass: "commodity" }
+ * "Commodities.WTIV6/USD" -> { base: "WTIV6",   klass: "commodity" }
  * "FX.EUR/USD"            -> { base: "EURUSD",  klass: "fx" }
  */
 export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | null {
@@ -51,6 +51,18 @@ export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | n
   // FX quotes both sides, so the pair itself is the identity.
   const base = klass === "fx" ? `${left}${right}` : left;
   return { base: base.toUpperCase(), klass };
+}
+
+// Standard futures month codes: F,G,H,J,K,M,N,Q,U,V,X,Z (Jan..Dec).
+const FUTURES_EXPIRY = /^([A-Z]+)[FGHJKMNQUVXZ]\d$/;
+
+/**
+ * Root commodity for a dated-futures base, e.g. "WTIV6" / "WTIM6" -> "WTI".
+ * Returns null for bases that aren't a dated-futures contract.
+ */
+export function futuresRoot(base: string): string | null {
+  const m = FUTURES_EXPIRY.exec(base);
+  return m ? m[1] : null;
 }
 
 /**
@@ -71,12 +83,13 @@ export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | n
  * Pacifica: kBONK/kPEPE/kSHIB are the same 1000x denomination as Variational.
  * SKHY is Avantis's truncated ticker for SK Hynix; Pacifica lists SKHYNIX.
  * Pacifica's SP500 is the index (~7800), not the SPY ETF — do not redirect.
+ *
+ * Dated crude (WTIV6, BRENTX6, …) is matched by root in FUTURES_HEDGE rather
+ * than listed expiry-by-expiry here — Avantis rolls the contract and the hedge
+ * venues quote the generic.
  */
 export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
   variational: {
-    WTIU6: "CL",
-    WTIM6: "CL",
-    BRENTV6: "BZ",
     SPY: "US500",
     BONK: "1000BONK",
     PEPE: "1000PEPE",
@@ -85,21 +98,13 @@ export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
     BB: "BBX",
   },
   ondo: {
-    WTIU6: "WTI",
-    WTIM6: "WTI",
-    BRENTV6: "BRENT",
     GOOG: "GOOGL",
   },
   grvt: {
-    WTIU6: "CL",
-    WTIM6: "CL",
-    BRENTV6: "BZ",
     GOOG: "GOOGL",
     BB: "BBX",
   },
   pacifica: {
-    WTIU6: "CL",
-    WTIM6: "CL",
     GOOG: "GOOGL",
     BONK: "kBONK",
     PEPE: "kPEPE",
@@ -109,45 +114,73 @@ export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
 };
 
 /**
+ * Dated Avantis futures root -> the hedge venue's generic ticker.
+ * Pacifica has no Brent.
+ */
+const FUTURES_HEDGE: Record<HedgeVenueId, Record<string, string>> = {
+  variational: { WTI: "CL", BRENT: "BZ" },
+  ondo: { WTI: "WTI", BRENT: "BRENT" },
+  grvt: { WTI: "CL", BRENT: "BZ" },
+  pacifica: { WTI: "CL" },
+};
+
+/**
  * Matches that are close enough to hedge but not the identical instrument.
- * Surfaced in the UI rather than hidden.
+ * Surfaced in the UI rather than hidden. Dated-crude caveats are looked up
+ * by futures root in matchCaveatFor so a roll does not drop the warning.
  */
 export const MATCH_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
   variational: {
     GOOG: "Avantis lists Alphabet Class C, Variational lists Class A (GOOGL) — near but not identical",
-    WTIM6: "Avantis prices a specific WTI futures expiry, Variational quotes generic WTI",
-    WTIU6: "Avantis prices a specific WTI futures expiry, Variational quotes generic WTI",
-    BRENTV6:
-      "Avantis prices a specific Brent futures expiry, Variational quotes generic Brent",
   },
   ondo: {
     GOOG: "Avantis lists Alphabet Class C, Ondo lists Class A (GOOGL) — near but not identical",
-    WTIM6: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
-    WTIU6: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
-    BRENTV6: "Avantis prices a specific Brent futures expiry, Ondo quotes generic Brent",
   },
   grvt: {
     GOOG: "Avantis lists Alphabet Class C, GRVT lists Class A (GOOGL) — near but not identical",
-    WTIM6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
-    WTIU6: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
-    BRENTV6: "Avantis prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
   },
   pacifica: {
     GOOG: "Avantis lists Alphabet Class C, Pacifica lists Class A (GOOGL) — near but not identical",
-    WTIM6: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
-    WTIU6: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
+  },
+};
+
+const FUTURES_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
+  variational: {
+    WTI: "Avantis prices a specific WTI futures expiry, Variational quotes generic WTI",
+    BRENT: "Avantis prices a specific Brent futures expiry, Variational quotes generic Brent",
+  },
+  ondo: {
+    WTI: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
+    BRENT: "Avantis prices a specific Brent futures expiry, Ondo quotes generic Brent",
+  },
+  grvt: {
+    WTI: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
+    BRENT: "Avantis prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
+  },
+  pacifica: {
+    WTI: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
   },
 };
 
 export function hedgeTickerFor(venue: HedgeVenueId, avantisBase: string): string {
-  return (HEDGE_OVERRIDES[venue][avantisBase] ?? avantisBase).toUpperCase();
+  const exact = HEDGE_OVERRIDES[venue][avantisBase];
+  if (exact) return exact.toUpperCase();
+  const root = futuresRoot(avantisBase);
+  if (root) {
+    const mapped = FUTURES_HEDGE[venue][root];
+    if (mapped) return mapped.toUpperCase();
+  }
+  return avantisBase.toUpperCase();
 }
 
 export function matchCaveatFor(
   venue: HedgeVenueId,
   avantisBase: string,
 ): string | undefined {
-  return MATCH_CAVEATS[venue][avantisBase];
+  const exact = MATCH_CAVEATS[venue][avantisBase];
+  if (exact) return exact;
+  const root = futuresRoot(avantisBase);
+  return root ? FUTURES_CAVEATS[venue][root] : undefined;
 }
 
 export const CLASS_LABEL: Record<AssetClass, string> = {

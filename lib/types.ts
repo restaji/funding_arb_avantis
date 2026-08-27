@@ -49,6 +49,10 @@ export interface AvantisMarket extends VenueFunding {
   isOpen: boolean;
   openInterestUsd: number;
   maxOpenInterestUsd: number;
+  /** Avantis long open interest, USDC notional. */
+  longOiUsd: number;
+  /** Avantis short open interest, USDC notional. */
+  shortOiUsd: number;
   /** Traded notional over the last day. Absent from the feed means no flow. */
   volume24hUsd: number;
 }
@@ -102,6 +106,8 @@ export interface Opportunity {
   hedgeVolume24hUsd: number;
   /** Fraction of the Avantis pair's OI cap already used, 0..1. */
   avantisOiUtil: number;
+  avantisLongOiUsd: number;
+  avantisShortOiUsd: number;
   caveat?: string;
 }
 

@@ -64,7 +64,7 @@ venue because the two disagree with Avantis in different places:
 | `SKHY` | — | — | `SKHYNIX` | Same name, truncated ticker on Avantis. |
 | `SPY` | `US500` | `SPY` | — | Despite the ticker, Variational's `US500` is the SPDR S&P 500 ETF itself, marked ~742 like the ETF. Not to be confused with Variational's `SPX`, which is **SPX6900, a memecoin**. Ondo lists the ETF under its own ticker. Pacifica's `SP500` is the index, not the ETF, so it is left unmatched. |
 | `BB` | `BBX` | `BB` | — | BlackBerry. Variational suffixes the ticker. |
-| `WTIU6`, `WTIM6`, `BRENTV6` | `CL`, `BZ` | `WTI`, `BRENT` | `CL` (WTI only) | Avantis prices dated futures expiries; hedge venues quote generic crude. Pacifica has no Brent. |
+| `WTIV6`, `BRENTX6` (any dated expiry) | `CL`, `BZ` | `WTI`, `BRENT` | `CL` (WTI only) | Avantis prices dated futures expiries; hedge venues quote generic crude. Pacifica has no Brent. |
 | `PUMP` | `PUMPFUN` | — | `PUMP` | Same token. |
 | `GOOG` | `GOOGL` | `GOOGL` | `GOOGL` | **Different share class.** Near-identical price, but not the same instrument. |
 
@@ -138,7 +138,7 @@ Unauthenticated batch calls per scan, each returning every market on the venue:
 
 | Venue | Endpoint | Supplies |
 |---|---|---|
-| Avantis | `socket-api-pub.avantisfi.com/socket-api/v1/data?override=true` | Borrow fee, OI, trading calendar |
+| Avantis | `data.avantisfi.com/v2/trading` | Funding, long/short OI, OI cap, trading calendar |
 | Avantis | `api.avantisfi.com/v1/history/analytics/daily-volumes-by-pair/1/true` | 24h volume, by pair index |
 | Variational | `omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats` | Funding, volume, OI |
 | Ondo | `api.ondoperps.xyz/v1/perps/contracts` | Funding, volume, OI, underlying-market state |
@@ -146,12 +146,12 @@ Unauthenticated batch calls per scan, each returning every market on the venue:
 | GRVT | `market-data.grvt.io/full/v1/all_instruments` + `/ticker` | Funding, volume, OI |
 | Pacifica | `api.pacifica.fi/api/v1/info/prices` | Funding, volume, OI |
 
-The Avantis socket-api feed carries no volume at all, hence the second Avantis call. It is
-joined on `pairIndex`, and a pair missing from its payload traded nothing — which is the
-common case. Because that volume gates the whole ranking, a failure there is raised as a
-venue error rather than degraded into a table of zeroes. The second Ondo call is the
-opposite: it only supplies row labels, so a failure there is swallowed and the squashed
-`displayName` is used instead.
+The Avantis trading feed carries funding and long/short open interest but no 24h volume,
+hence the second Avantis call. It is joined on `pairIndex`, and a pair missing from its
+payload traded nothing — which is the common case. Because that volume gates the whole
+ranking, a failure there is raised as a venue error rather than degraded into a table of
+zeroes. The second Ondo call is the opposite: it only supplies row labels, so a failure
+there is swallowed and the squashed `displayName` is used instead.
 
 Note the Variational host: `omni.variational.io` is behind Cloudflare and needs TLS
 impersonation, but `omni-client-api.prod...` answers a plain `fetch`. Ondo has no such split.
