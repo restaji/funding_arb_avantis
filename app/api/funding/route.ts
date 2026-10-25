@@ -25,6 +25,7 @@ import { fetchVerantaMarkets } from "@/lib/venues/veranta";
 
 export const revalidate = 60;
 export const maxDuration = 30;
+export const preferredRegion = ["fra1", "hnd1"];
 
 const HEDGE_FETCHERS: Record<HedgeVenueId, () => Promise<Map<string, HedgeMarket>>> = {
   hyperliquid: fetchHyperliquidMarkets,

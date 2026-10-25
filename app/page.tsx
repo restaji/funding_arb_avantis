@@ -9,6 +9,7 @@ import { scan } from "@/lib/strategy";
 import { HEDGE_VENUES, VENUE_LABEL } from "@/lib/types";
 
 export const revalidate = 60;
+export const preferredRegion = ["fra1", "hnd1"];
 
 export default async function Page() {
   const { opportunities, blocked, counts, venueErrors, fetchedAt } = await scan();

@@ -26,10 +26,21 @@ const httpsAgent = new https.Agent({
 /** Max age (ms) for serving a cached response when live attempts fail. */
 const STALE_FALLBACK_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
-/** Domains hijacked by Indonesian ISPs (Internet Positif) -> skip native fetch & go straight to DoH. */
-const DOH_FIRST_DOMAINS = ["binance.com", "bybit.com", "okx.com", "gateio.ws"];
+const DEFAULT_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+/** Domains hijacked by Indonesian ISPs (Internet Positif) -> skip native fetch & go straight to DoH locally. */
+const DOH_FIRST_DOMAINS = [
+  "binance.com",
+  "bybit.com",
+  "bytick.com",
+  "bybitglobal.com",
+  "okx.com",
+  "gateio.ws",
+];
 
 function needsDohFirst(urlStr: string): boolean {
+  if (process.env.VERCEL) return false;
   try {
     const host = new URL(urlStr).hostname.toLowerCase();
     return DOH_FIRST_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
@@ -151,7 +162,7 @@ function httpsRequestJsonWithDoh<T>(
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const reqHeaders: Record<string, string> = {
-      "User-Agent": "funding-charge-v2/1.0",
+      "User-Agent": DEFAULT_UA,
       Accept: "application/json",
       "Accept-Encoding": "gzip, deflate, br",
       ...(opts.headers ?? {}),
@@ -239,7 +250,7 @@ async function attemptFetch<T>(
 
   try {
     const reqHeaders: Record<string, string> = {
-      "User-Agent": "funding-charge-v2/1.0",
+      "User-Agent": DEFAULT_UA,
       Accept: "application/json",
       ...(headers ?? {}),
     };
