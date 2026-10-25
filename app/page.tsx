@@ -1,10 +1,7 @@
 import { Fragment } from "react";
 
-import { OpportunityTable } from "@/components/OpportunityTable";
-import { RefreshButton } from "@/components/RefreshButton";
+import { Scanner } from "@/components/Scanner";
 import { Venue } from "@/components/Venue";
-import { WithheldPanel } from "@/components/WithheldPanel";
-import { utcStamp } from "@/lib/format";
 import { scan } from "@/lib/strategy";
 import { HEDGE_VENUES, VENUE_LABEL } from "@/lib/types";
 
@@ -12,65 +9,11 @@ export const revalidate = 60;
 export const preferredRegion = ["fra1", "hnd1"];
 
 export default async function Page() {
-  const { opportunities, blocked, counts, venueErrors, fetchedAt } = await scan();
-
-  const noEdge = blocked.filter((b) => b.reason === "no_edge");
-  const hasVenueError = Object.keys(venueErrors).length > 0;
+  const { assets, counts, venueErrors, fetchedAt } = await scan();
 
   return (
     <main className="shell">
-      <header className="masthead">
-        <div className="brandbar">
-          <div className="clock">
-            <span className={`pulse ${hasVenueError ? "stale" : ""}`}>
-              {hasVenueError ? "Degraded" : "Live"}
-            </span>
-            <span>{utcStamp(fetchedAt)}</span>
-          </div>
-        </div>
-
-        <div className="title-row">
-          <h1>Funding rate arbitrage</h1>
-          <RefreshButton />
-        </div>
-      </header>
-
-      {hasVenueError && (
-        <div className="notice warn">
-          <div className="title">A venue did not respond</div>
-          <p>
-            {Object.entries(venueErrors)
-              .map(([v, e]) => `${VENUE_LABEL[v as keyof typeof VENUE_LABEL]}: ${e}`)
-              .join(" · ")}
-          </p>
-        </div>
-      )}
-
-      {opportunities.length === 0 && (
-        <div className="empty standalone">
-          {hasVenueError
-            ? "Venue data is unavailable, so nothing can be ranked right now."
-            : noEdge.length > 0
-              ? "Nothing currently pays enough to cover the Veranta rate."
-              : "No market is open on Veranta and a hedge venue at the same time."}
-        </div>
-      )}
-
-      {opportunities.length > 0 && (
-        <section>
-          <OpportunityTable rows={opportunities} />
-        </section>
-      )}
-
-      {blocked.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2>Withheld</h2>
-            <span className="section-badge">{blocked.length} markets</span>
-          </div>
-          <WithheldPanel blocked={blocked} />
-        </section>
-      )}
+      <Scanner assets={assets} venueErrors={venueErrors} fetchedAt={fetchedAt} />
 
       <footer>
         <div className="matchup">

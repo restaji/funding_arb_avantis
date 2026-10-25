@@ -1,12 +1,31 @@
 import { Tip, TipHead } from "@/components/Tooltip";
-import { type Blocked, type BlockedReason } from "@/lib/types";
+import { listHedgeNames } from "@/lib/rank";
+import {
+  HEDGE_VENUES,
+  type Blocked,
+  type BlockedReason,
+  type HedgeVenueId,
+} from "@/lib/types";
 
-const REASON_LABEL: Record<BlockedReason, string> = {
-  no_edge: "No edge after the Veranta rate",
-  anchor_closed: "Veranta market closed",
-  hedge_closed: "Every hedge market closed",
-  not_listed_hedge: "Not listed on any hedge venue",
-};
+function reasonLabel(
+  reason: BlockedReason,
+  hedges: readonly HedgeVenueId[],
+): string {
+  const scoped = hedges.length < HEDGE_VENUES.length;
+  const names = listHedgeNames(hedges);
+  switch (reason) {
+    case "no_edge":
+      return scoped
+        ? `No edge against ${names}`
+        : "No edge after the Veranta rate";
+    case "anchor_closed":
+      return "Veranta market closed";
+    case "hedge_closed":
+      return scoped ? `${names} market closed` : "Every hedge market closed";
+    case "not_listed_hedge":
+      return scoped ? `Not listed on ${names}` : "Not listed on any hedge venue";
+  }
+}
 
 const ORDER: BlockedReason[] = [
   "no_edge",
@@ -16,7 +35,13 @@ const ORDER: BlockedReason[] = [
 ];
 
 /** Withheld assets, grouped by why. Each asset carries its detail on hover. */
-export function WithheldPanel({ blocked }: { blocked: Blocked[] }) {
+export function WithheldPanel({
+  blocked,
+  hedges = HEDGE_VENUES,
+}: {
+  blocked: Blocked[];
+  hedges?: readonly HedgeVenueId[];
+}) {
   const groups = ORDER.map((reason) => ({
     reason,
     items: blocked.filter((b) => b.reason === reason),
@@ -34,7 +59,7 @@ export function WithheldPanel({ blocked }: { blocked: Blocked[] }) {
             <span className="caret" aria-hidden>
               ▸
             </span>
-            <span className="wh-reason">{REASON_LABEL[reason]}</span>
+            <span className="wh-reason">{reasonLabel(reason, hedges)}</span>
             <span className="wh-share" aria-hidden>
               <i style={{ width: `${((items.length / biggest) * 100).toFixed(3)}%` }} />
             </span>

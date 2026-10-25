@@ -382,3 +382,64 @@ export const CLASS_ORDER: AssetClass[] = [
   "fx",
   "other",
 ];
+
+/**
+ * Direct deep-link to a venue's trading UI for a given Veranta base asset.
+ *
+ * Uses the venue-specific mapped ticker (via `hedgeTickerFor`) so 1000x
+ * contracts (`kPEPE`, `1000PEPE`, `SHIB1000`), HIP-3 RWA feeds (`xyz:NVDA`,
+ * `xyz:CL`), and dated-futures roots resolve to the exact market page.
+ */
+export function venueTradeUrl(
+  venue: HedgeVenueId | "veranta",
+  verantaBase: string,
+  klass?: AssetClass,
+  side?: "long" | "short",
+): string {
+  const base = verantaBase.toUpperCase();
+  if (venue === "veranta") {
+    return klass === "fx" && base.length === 6
+      ? `https://www.veranta.xyz/trade?asset=${base.slice(0, 3)}-${base.slice(3)}`
+      : `https://www.veranta.xyz/trade?asset=${base}-USD`;
+  }
+
+  const raw = hedgeTickerFor(venue, base, klass) || base;
+
+  switch (venue) {
+    case "hyperliquid": {
+      const sym = raw.startsWith("XYZ:") ? `xyz:${raw.slice(4)}` : raw;
+      return `https://app.hyperliquid.xyz/trade/${sym}`;
+    }
+    case "lighter":
+      return `https://app.lighter.xyz/trade/${raw}`;
+    case "ostium": {
+      if (klass === "fx" && base.length === 6) {
+        return `https://app.ostium.com/trade?from=${base.slice(0, 3)}&to=${base.slice(3)}`;
+      }
+      const from = raw.endsWith("USD") ? raw.slice(0, -3) : raw;
+      return `https://app.ostium.com/trade?from=${from}&to=USD`;
+    }
+    case "variational":
+      return `https://omni.variational.io/perpetual/${raw}`;
+    case "ondo":
+      return `https://app.ondoperps.xyz/?market=${raw}-USD.P`;
+    case "grvt":
+      return `https://grvt.io/exchange/perpetual/${raw}-USDT`;
+    case "pacifica":
+      return `https://app.pacifica.fi/trade/${raw}`;
+    case "jupiter": {
+      const dir = side ?? "long";
+      return `https://jup.ag/perps/${dir}/${base}-${base}`;
+    }
+    case "antarctic":
+      return `https://www.antarctic.exchange/trade/perpetual/${raw.toLowerCase()}_usdt`;
+    case "binance":
+      return `https://www.binance.com/en/futures/${raw}USDT`;
+    case "bybit":
+      return `https://www.bybit.com/trade/usdt/${raw}USDT`;
+    case "okx":
+      return `https://www.okx.com/trade-swap/${raw.toLowerCase()}-usdt-swap`;
+    case "gate":
+      return `https://www.gate.io/futures/USDT/${raw}_USDT`;
+  }
+}

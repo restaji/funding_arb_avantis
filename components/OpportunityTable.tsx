@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Tip } from "@/components/Tooltip";
 import { Venue, venueTone } from "@/components/Venue";
 import { bps, earnClass, pct, usd } from "@/lib/format";
-import { CLASS_LABEL, CLASS_ORDER, type AssetClass } from "@/lib/symbols";
+import { CLASS_LABEL, CLASS_ORDER, venueTradeUrl, type AssetClass } from "@/lib/symbols";
 import {
   HEDGE_VENUES,
   legsOf,
@@ -175,7 +175,6 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
     dir: "desc",
   });
   const [klass, setKlass] = useState<AssetClass | "all">("all");
-  const [venue, setVenue] = useState<HedgeVenueId | "all">("all");
 
   const all = useMemo<Row[]>(
     () =>
@@ -210,11 +209,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
   }, [all]);
 
   const visible = useMemo(() => {
-    const kept = all.filter(
-      (r) =>
-        (klass === "all" || r.o.klass === klass) &&
-        (venue === "all" || r.o.hedgeVenue === venue),
-    );
+    const kept = all.filter((r) => klass === "all" || r.o.klass === klass);
     const value = VALUE[sort.key];
     const flip = sort.dir === "asc" ? 1 : -1;
     return [...kept].sort((a, b) => {
@@ -225,7 +220,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
       }
       return (x - y) * flip;
     });
-  }, [all, klass, venue, sort]);
+  }, [all, klass, sort]);
 
   const scale = useMemo(
     () =>
@@ -282,32 +277,6 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
           ))}
         </div>
       </div>
-
-      {venueCounts.length > 1 && (
-        <div className="controls">
-          <span className="ctl-label">Hedge</span>
-          <div className="chips">
-            <button
-              className="chip-btn"
-              aria-pressed={venue === "all"}
-              onClick={() => setVenue("all")}
-            >
-              All<span className="count">{all.length}</span>
-            </button>
-            {venueCounts.map(([v, n]) => (
-              <button
-                key={v}
-                className="chip-btn"
-                aria-pressed={venue === v}
-                onClick={() => setVenue(v)}
-              >
-                {VENUE_LABEL[v]}
-                <span className="count">{n}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {visible.length === 0 ? (
         <div className="empty">Nothing matches this filter — try clearing it.</div>
@@ -400,7 +369,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                 const hedgeSide = o.anchorSide === "long" ? "short" : "long";
                 const split = oiSplit(o.verantaLongOiUsd, o.verantaShortOiUsd);
                 return (
-                  <tr key={o.asset} className={r.rank === 1 ? "lead-row" : ""}>
+                  <tr key={o.asset}>
                     <td className="rank">{r.rank}</td>
                     <td className="asset">
                       {o.asset}
@@ -416,14 +385,24 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                     </td>
                     <td>
                       <span className="direction">
-                        <span className="row">
+                        <a
+                          className={`leg-btn ${o.anchorSide}`}
+                          href={venueTradeUrl("veranta", o.asset, o.klass, o.anchorSide)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <span className={`s ${o.anchorSide}`}>{o.anchorSide}</span>
                           <Venue venue="veranta" />
-                        </span>
-                        <span className="row">
+                        </a>
+                        <a
+                          className={`leg-btn ${hedgeSide}`}
+                          href={venueTradeUrl(o.hedgeVenue, o.asset, o.klass, hedgeSide)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <span className={`s ${hedgeSide}`}>{hedgeSide}</span>
                           <Venue venue={o.hedgeVenue} />
-                        </span>
+                        </a>
                       </span>
                     </td>
                     <td className="num av-num">

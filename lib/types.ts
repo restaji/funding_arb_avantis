@@ -169,12 +169,45 @@ export interface Blocked {
   detail: string;
 }
 
+/** One hedge venue's quote on a Veranta asset, enough to re-pair on the client. */
+export interface ScanHedge {
+  venue: HedgeVenueId;
+  name: string;
+  longDailyPct: number;
+  shortDailyPct: number;
+  volume24hUsd: number;
+  stale: boolean;
+}
+
+/**
+ * One Veranta market plus every hedge that quotes it.
+ *
+ * The board re-ranks this set when the venue checklist changes, so a
+ * Hyperliquid-only filter can surface a pair that lost to Variational
+ * in the all-venues ranking.
+ */
+export interface ScanAsset {
+  asset: string;
+  klass: AssetClass;
+  isOpen: boolean;
+  longDailyPct: number;
+  shortDailyPct: number;
+  volume24hUsd: number;
+  openInterestUsd: number;
+  maxOpenInterestUsd: number;
+  longOiUsd: number;
+  shortOiUsd: number;
+  hedges: ScanHedge[];
+}
+
 export interface ScanResult {
   fetchedAt: string;
   /** Every pair that pays, deepest Veranta volume first. */
   opportunities: Opportunity[];
   /** Withheld: no candidate pair to build, or no edge in the one there is. */
   blocked: Blocked[];
+  /** Raw per-asset quotes; the UI re-ranks these against the venue checklist. */
+  assets: ScanAsset[];
   counts: {
     verantaMarkets: number;
     /** Listing count per hedge venue. A venue that errored is absent. */
