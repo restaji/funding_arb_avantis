@@ -2,7 +2,6 @@ import { CLASS_LABEL, hedgeTickerFor, matchCaveatFor } from "@/lib/symbols";
 import {
   HEDGE_VENUES,
   VENUE_LABEL,
-  type AvantisMarket,
   type Blocked,
   type HedgeMarket,
   type HedgeVenueId,
@@ -10,19 +9,38 @@ import {
   type ScanResult,
   type Side,
   type VenueId,
+  type VerantaMarket,
 } from "@/lib/types";
-import { fetchAvantisMarkets } from "@/lib/venues/avantis";
+import { fetchAntarcticMarkets } from "@/lib/venues/antarctic";
+import { fetchBinanceMarkets } from "@/lib/venues/binance";
+import { fetchBybitMarkets } from "@/lib/venues/bybit";
+import { fetchGateMarkets } from "@/lib/venues/gate";
 import { fetchGrvtMarkets } from "@/lib/venues/grvt";
+import { fetchHyperliquidMarkets } from "@/lib/venues/hyperliquid";
+import { fetchJupiterMarkets } from "@/lib/venues/jupiter";
+import { fetchLighterMarkets } from "@/lib/venues/lighter";
+import { fetchOkxMarkets } from "@/lib/venues/okx";
 import { fetchOndoMarkets } from "@/lib/venues/ondo";
+import { fetchOstiumMarkets } from "@/lib/venues/ostium";
 import { fetchPacificaMarkets } from "@/lib/venues/pacifica";
 import { fetchVariationalMarkets } from "@/lib/venues/variational";
+import { fetchVerantaMarkets } from "@/lib/venues/veranta";
 
 /** How to load each hedge venue. Order here is the order shown in the UI. */
 const HEDGE_FETCHERS: Record<HedgeVenueId, () => Promise<Map<string, HedgeMarket>>> = {
+  hyperliquid: fetchHyperliquidMarkets,
+  lighter: fetchLighterMarkets,
+  ostium: fetchOstiumMarkets,
   variational: fetchVariationalMarkets,
   ondo: fetchOndoMarkets,
   grvt: fetchGrvtMarkets,
   pacifica: fetchPacificaMarkets,
+  jupiter: fetchJupiterMarkets,
+  antarctic: fetchAntarcticMarkets,
+  binance: fetchBinanceMarkets,
+  bybit: fetchBybitMarkets,
+  okx: fetchOkxMarkets,
+  gate: fetchGateMarkets,
 };
 
 /**
@@ -44,17 +62,13 @@ type PairCore = Pick<
 >;
 
 /**
- * Build the two Avantis-anchored candidates for one asset and keep the better.
- *
- * Avantis is a borrow-fee venue, so both of its sides are positive and it can
- * never be the leg that earns. Positive carry therefore requires the hedge to
- * pay more than the Avantis borrow fee costs.
+ * Build the two Veranta-anchored candidates for one asset and keep the better.
  */
-export function bestPair(anchor: AvantisMarket, hedge: HedgeMarket): PairCore {
+export function bestPair(anchor: VerantaMarket, hedge: HedgeMarket): PairCore {
   const candidates: Array<{ anchorSide: Side; longPct: number; shortPct: number }> = [
-    // Long Avantis, short the hedge.
+    // Long Veranta, short the hedge.
     { anchorSide: "long", longPct: anchor.longDailyPct, shortPct: hedge.shortDailyPct },
-    // Long the hedge, short Avantis.
+    // Long the hedge, short Veranta.
     { anchorSide: "short", longPct: hedge.longDailyPct, shortPct: anchor.shortDailyPct },
   ];
 
@@ -74,12 +88,12 @@ export function bestPair(anchor: AvantisMarket, hedge: HedgeMarket): PairCore {
   return {
     asset: anchor.asset,
     long: {
-      venue: anchorIsLong ? "avantis" : hedge.venue,
+      venue: anchorIsLong ? "veranta" : hedge.venue,
       side: "long",
       dailyPct: best.longPct,
     },
     short: {
-      venue: anchorIsLong ? hedge.venue : "avantis",
+      venue: anchorIsLong ? hedge.venue : "veranta",
       side: "short",
       dailyPct: best.shortPct,
     },
@@ -97,7 +111,7 @@ export function bestPair(anchor: AvantisMarket, hedge: HedgeMarket): PairCore {
  * trade if only one of them can absorb the size.
  */
 export function bestAcrossHedges(
-  anchor: AvantisMarket,
+  anchor: VerantaMarket,
   hedges: HedgeMarket[],
 ): { core: PairCore; hedge: HedgeMarket } | null {
   let winner: { core: PairCore; hedge: HedgeMarket } | null = null;
@@ -130,18 +144,68 @@ async function settle<T>(p: Promise<T>): Promise<Settled<T>> {
 const listNames = (venues: HedgeVenueId[]): string =>
   venues.map((v) => VENUE_LABEL[v]).join(" and ");
 
+let scanCache: { result: ScanResult; ts: number } | null = null;
+let scanInFlight: Promise<ScanResult> | null = null;
+const SCAN_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateScanCache(): void {
+  scanCache = null;
+}
+
 export async function scan(): Promise<ScanResult> {
-  const [avantisRes, hedgeResults] = await Promise.all([
-    settle(fetchAvantisMarkets()),
-    Promise.all(
-      HEDGE_VENUES.map(async (id) => ({ id, res: await settle(HEDGE_FETCHERS[id]()) })),
-    ),
+  if (scanCache && Date.now() - scanCache.ts < SCAN_CACHE_TTL_MS) {
+    return scanCache.result;
+  }
+  if (scanInFlight) {
+    return scanInFlight;
+  }
+
+  scanInFlight = (async (): Promise<ScanResult> => {
+    try {
+      const res = await runScan();
+      // Only cache if the anchor leg succeeded
+      if (!res.venueErrors.veranta && res.counts.verantaMarkets > 0) {
+        scanCache = { result: res, ts: Date.now() };
+      }
+      return res;
+    } finally {
+      scanInFlight = null;
+    }
+  })();
+
+  return scanInFlight;
+}
+
+async function runScan(): Promise<ScanResult> {
+  const verantaPromise = settle(fetchVerantaMarkets());
+
+  const hedgeResultsPromise = Promise.all(
+    HEDGE_VENUES.map(async (id) => {
+      if (id === "grvt") {
+        // Wait for Veranta first so GRVT only queries instruments that exist on Veranta
+        const vRes = await verantaPromise;
+        const allowed = new Set<string>();
+        if (vRes.ok) {
+          for (const m of vRes.value.values()) {
+            const t = hedgeTickerFor("grvt", m.asset, m.klass);
+            if (t) allowed.add(t);
+          }
+        }
+        return { id, res: await settle(fetchGrvtMarkets(allowed)) };
+      }
+      return { id, res: await settle(HEDGE_FETCHERS[id]()) };
+    }),
+  );
+
+  const [verantaRes, hedgeResults] = await Promise.all([
+    verantaPromise,
+    hedgeResultsPromise,
   ]);
 
   const venueErrors: Partial<Record<VenueId, string>> = {};
 
-  const avantis = avantisRes.ok ? avantisRes.value : new Map<string, AvantisMarket>();
-  if (!avantisRes.ok) venueErrors.avantis = avantisRes.error;
+  const veranta = verantaRes.ok ? verantaRes.value : new Map<string, VerantaMarket>();
+  if (!verantaRes.ok) venueErrors.veranta = verantaRes.error;
 
   const hedgeBooks: Array<{ id: HedgeVenueId; markets: Map<string, HedgeMarket> }> = [];
   const hedgeCounts: Partial<Record<HedgeVenueId, number>> = {};
@@ -158,9 +222,9 @@ export async function scan(): Promise<ScanResult> {
   const blocked: Blocked[] = [];
   let matched = 0;
 
-  for (const anchor of avantis.values()) {
+  for (const anchor of veranta.values()) {
     const listings = hedgeBooks.flatMap(({ id, markets }) => {
-      const market = markets.get(hedgeTickerFor(id, anchor.asset));
+      const market = markets.get(hedgeTickerFor(id, anchor.asset, anchor.klass));
       return market ? [market] : [];
     });
 
@@ -170,7 +234,7 @@ export async function scan(): Promise<ScanResult> {
         label: anchor.asset,
         klass: anchor.klass,
         reason: "not_listed_hedge",
-        detail: `Avantis lists it as ${CLASS_LABEL[anchor.klass]}, no matching market on ${listNames(
+        detail: `Veranta lists it as ${CLASS_LABEL[anchor.klass]}, no matching market on ${listNames(
           hedgeBooks.map((h) => h.id),
         )}`,
       });
@@ -191,7 +255,7 @@ export async function scan(): Promise<ScanResult> {
         label,
         klass: anchor.klass,
         reason: "anchor_closed",
-        detail: "Avantis reports the feed outside its trading calendar",
+        detail: "Veranta reports the feed outside its trading calendar",
       });
       continue;
     }
@@ -219,16 +283,16 @@ export async function scan(): Promise<ScanResult> {
       klass: anchor.klass,
       volume24hUsd: anchor.volume24hUsd,
       hedgeVolume24hUsd: winner.hedge.volume24hUsd,
-      avantisOiUtil:
+      verantaOiUtil:
         anchor.maxOpenInterestUsd > 0
           ? anchor.openInterestUsd / anchor.maxOpenInterestUsd
           : 0,
-      avantisLongOiUsd: anchor.longOiUsd,
-      avantisShortOiUsd: anchor.shortOiUsd,
+      verantaLongOiUsd: anchor.longOiUsd,
+      verantaShortOiUsd: anchor.shortOiUsd,
       caveat: matchCaveatFor(winner.hedge.venue, anchor.asset),
     };
 
-    // Every Avantis direction costs more than any hedge pays, so there is no
+    // Every Veranta direction costs more than any hedge pays, so there is no
     // trade here — only the inverse, which the anchor rule does not allow.
     if (opp.netCarryBps <= 0) {
       blocked.push({
@@ -247,7 +311,7 @@ export async function scan(): Promise<ScanResult> {
   }
 
   // Depth first: everything left pays, so the question is what size it takes.
-  // Avantis trades nothing at all in most of its markets, so ties on zero
+  // Veranta trades nothing at all in most of its markets, so ties on zero
   // volume fall back to the rate.
   opportunities.sort(
     (a, b) => b.volume24hUsd - a.volume24hUsd || b.netCarryBps - a.netCarryBps,
@@ -259,7 +323,7 @@ export async function scan(): Promise<ScanResult> {
     opportunities,
     blocked,
     counts: {
-      avantisMarkets: avantis.size,
+      verantaMarkets: veranta.size,
       hedgeMarkets: hedgeCounts,
       matched,
     },

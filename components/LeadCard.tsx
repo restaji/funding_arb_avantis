@@ -56,7 +56,7 @@ export function LeadCard({
       </div>
 
       <div className="legs">
-        <LegRow venue="avantis" side={o.anchorSide} dailyPct={anchor.dailyPct} />
+        <LegRow venue="veranta" side={o.anchorSide} dailyPct={anchor.dailyPct} />
         <LegRow
           venue={o.hedgeVenue}
           side={o.anchorSide === "long" ? "short" : "long"}
@@ -76,14 +76,14 @@ export function LeadCard({
       </div>
 
       <div className="lead-foot">
-        <span>{usd(o.volume24hUsd)} Avantis 24h volume</span>
+        <span>{usd(o.volume24hUsd)} Veranta 24h volume</span>
         <span className="dot">·</span>
         <span>
           {usd(o.hedgeVolume24hUsd)} {VENUE_LABEL[o.hedgeVenue]} 24h volume
         </span>
         <span className="dot">·</span>
         <span>
-          Long {usd(o.avantisLongOiUsd)} / short {usd(o.avantisShortOiUsd)} Avantis OI
+          Long {usd(o.verantaLongOiUsd)} / short {usd(o.verantaShortOiUsd)} Veranta OI
         </span>
         {o.caveat && (
           <>

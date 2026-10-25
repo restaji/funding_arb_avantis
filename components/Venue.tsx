@@ -1,20 +1,37 @@
 import { VENUE_LABEL, type VenueId } from "@/lib/types";
 
-/** Avantis violet, Variational blue, Ondo teal, GRVT amber, Pacifica sky. */
 const TONE: Record<VenueId, string> = {
-  avantis: "av",
+  veranta: "av",
+  hyperliquid: "hl",
+  lighter: "lt",
+  ostium: "os",
   variational: "va",
   ondo: "on",
   grvt: "gr",
   pacifica: "pa",
+  jupiter: "ju",
+  antarctic: "ax",
+  binance: "bn",
+  bybit: "bb",
+  okx: "ok",
+  gate: "gt",
 };
 
 const ICON: Record<VenueId, string> = {
-  avantis: "/venues/avantis.png",
+  veranta: "/venues/veranta.png",
+  hyperliquid: "/venues/hyperliquid.svg",
+  lighter: "/venues/lighter.svg",
+  ostium: "/venues/ostium.svg",
   variational: "/venues/variational.png",
   ondo: "/venues/ondo.svg",
   grvt: "/venues/grvt.png",
   pacifica: "/venues/pacifica.svg",
+  jupiter: "/venues/jupiter.png",
+  antarctic: "/venues/antarctic.svg",
+  binance: "/venues/binance.svg",
+  bybit: "/venues/bybit.svg",
+  okx: "/venues/okx.svg",
+  gate: "/venues/gate.svg",
 };
 
 /**
@@ -37,4 +54,4 @@ export function Venue({ venue, size = 13 }: { venue: VenueId; size?: number }) {
   );
 }
 
-export const venueTone = (venue: VenueId): string => TONE[venue];
+export const venueTone = (venue: VenueId): string => TONE[venue] ?? venue;

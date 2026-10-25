@@ -1,26 +1,63 @@
 import type { AssetClass } from "@/lib/symbols";
 
-export type VenueId = "avantis" | "variational" | "ondo" | "grvt" | "pacifica";
+export type VenueId =
+  | "veranta"
+  | "hyperliquid"
+  | "lighter"
+  | "ostium"
+  | "variational"
+  | "ondo"
+  | "grvt"
+  | "pacifica"
+  | "jupiter"
+  | "antarctic"
+  | "binance"
+  | "bybit"
+  | "okx"
+  | "gate";
 export type Side = "long" | "short";
 
-/** Avantis must sit on exactly one leg of every candidate pair. */
-export const ANCHOR_VENUE: VenueId = "avantis";
+/** Veranta must sit on exactly one leg of every candidate pair. */
+export const ANCHOR_VENUE: VenueId = "veranta";
 
 /**
- * The venues Avantis can be hedged against, tried in this order.
+ * The venues Veranta can be hedged against, tried in this order.
  *
  * Every asset is scored against all of them and only the best-paying pair
  * survives, so adding a venue here can only improve a row, never remove one.
  */
-export const HEDGE_VENUES = ["variational", "ondo", "grvt", "pacifica"] as const;
+export const HEDGE_VENUES = [
+  "hyperliquid",
+  "lighter",
+  "ostium",
+  "variational",
+  "ondo",
+  "grvt",
+  "pacifica",
+  "jupiter",
+  "antarctic",
+  "binance",
+  "bybit",
+  "okx",
+  "gate",
+] as const;
 export type HedgeVenueId = (typeof HEDGE_VENUES)[number];
 
 export const VENUE_LABEL: Record<VenueId, string> = {
-  avantis: "Avantis",
+  veranta: "Veranta",
+  hyperliquid: "Hyperliquid",
+  lighter: "Lighter",
+  ostium: "Ostium",
   variational: "Variational",
   ondo: "Ondo Perps",
   grvt: "GRVT",
   pacifica: "Pacifica",
+  jupiter: "Jupiter",
+  antarctic: "Antarctic",
+  binance: "Binance",
+  bybit: "Bybit",
+  okx: "OKX",
+  gate: "Gate",
 };
 
 /**
@@ -30,7 +67,7 @@ export const VENUE_LABEL: Record<VenueId, string> = {
  */
 export interface VenueFunding {
   venue: VenueId;
-  /** Canonical asset key (the Avantis base symbol). */
+  /** Canonical asset key (the Veranta base symbol). */
   asset: string;
   /** Venue-native market identifier. */
   market: string;
@@ -42,16 +79,16 @@ export interface VenueFunding {
   stale: boolean;
 }
 
-export interface AvantisMarket extends VenueFunding {
+export interface VerantaMarket extends VenueFunding {
   pairIndex: number;
   klass: AssetClass;
-  /** Avantis publishes a trading calendar per feed. Crypto is always true. */
+  /** Veranta publishes a trading calendar per feed. Crypto is always true. */
   isOpen: boolean;
   openInterestUsd: number;
   maxOpenInterestUsd: number;
-  /** Avantis long open interest, USDC notional. */
+  /** Veranta long open interest, USDC notional. */
   longOiUsd: number;
-  /** Avantis short open interest, USDC notional. */
+  /** Veranta short open interest, USDC notional. */
   shortOiUsd: number;
   /** Traded notional over the last day. Absent from the feed means no flow. */
   volume24hUsd: number;
@@ -100,18 +137,18 @@ export interface Opportunity {
   /** Daily carry in basis points of notional, positive = you earn. */
   netCarryBps: number;
   carryAprPct: number;
-  /** Avantis 24h volume, the liquidity reference for the whole pair. */
+  /** Veranta 24h volume, the liquidity reference for the whole pair. */
   volume24hUsd: number;
   /** 24h volume on the winning hedge venue, which caps the pair just as hard. */
   hedgeVolume24hUsd: number;
-  /** Fraction of the Avantis pair's OI cap already used, 0..1. */
-  avantisOiUtil: number;
-  avantisLongOiUsd: number;
-  avantisShortOiUsd: number;
+  /** Fraction of the Veranta pair's OI cap already used, 0..1. */
+  verantaOiUtil: number;
+  verantaLongOiUsd: number;
+  verantaShortOiUsd: number;
   caveat?: string;
 }
 
-/** Splits a pair into its Avantis leg and its hedge leg. */
+/** Splits a pair into its Veranta leg and its hedge leg. */
 export function legsOf(o: Opportunity): { anchor: Leg; hedge: Leg } {
   return o.anchorSide === "long"
     ? { anchor: o.long, hedge: o.short }
@@ -134,12 +171,12 @@ export interface Blocked {
 
 export interface ScanResult {
   fetchedAt: string;
-  /** Every pair that pays, deepest Avantis volume first. */
+  /** Every pair that pays, deepest Veranta volume first. */
   opportunities: Opportunity[];
   /** Withheld: no candidate pair to build, or no edge in the one there is. */
   blocked: Blocked[];
   counts: {
-    avantisMarkets: number;
+    verantaMarkets: number;
     /** Listing count per hedge venue. A venue that errored is absent. */
     hedgeMarkets: Partial<Record<HedgeVenueId, number>>;
     matched: number;

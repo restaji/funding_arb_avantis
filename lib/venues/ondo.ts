@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/net";
 import type { OndoMarket } from "@/lib/types";
 
 const CONTRACTS_API = "https://api.ondoperps.xyz/v1/perps/contracts";
@@ -7,6 +8,7 @@ interface OndoContract {
   market?: string;
   displayName?: string;
   disabled?: boolean;
+  reduceOnly?: boolean;
   isClosed?: boolean;
   fundingRate?: string | number;
   nextFundingRate?: string | number;
@@ -51,13 +53,7 @@ function baseOf(market: string): string | null {
 async function fetchOndoNames(): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   try {
-    const res = await fetch(MARKETS_API, {
-      next: { revalidate: 3600, tags: ["funding"] },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return out;
-
-    const payload = (await res.json()) as OndoMarketsPayload;
+    const payload = await fetchJson<OndoMarketsPayload>(MARKETS_API, 3600);
     for (const p of payload.result?.perps?.tradingPairs ?? []) {
       if (p?.market && p.longName) out.set(p.market.toUpperCase(), p.longName);
     }
@@ -86,16 +82,10 @@ async function fetchOndoNames(): Promise<Map<string, string>> {
  * only a fallback.
  */
 export async function fetchOndoMarkets(): Promise<Map<string, OndoMarket>> {
-  const [res, names] = await Promise.all([
-    fetch(CONTRACTS_API, {
-      next: { revalidate: 120, tags: ["funding"] },
-      signal: AbortSignal.timeout(15000),
-    }),
+  const [payload, names] = await Promise.all([
+    fetchJson<OndoContractsPayload>(CONTRACTS_API),
     fetchOndoNames(),
   ]);
-  if (!res.ok) throw new Error(`Ondo /v1/perps/contracts ${res.status}`);
-
-  const payload = (await res.json()) as OndoContractsPayload;
   const out = new Map<string, OndoMarket>();
 
   for (const c of payload.result ?? []) {
@@ -120,8 +110,8 @@ export async function fetchOndoMarkets(): Promise<Map<string, OndoMarket>> {
       fundingIntervalS: 3600,
       // Ondo voids funding for an hour whenever the premium sampler drops more
       // than 6 minutes of data, so an exact zero is missing data, not free
-      // carry. A disabled market cannot be traded at all.
-      stale: Boolean(c.disabled) || hourly === 0,
+      // carry. A disabled or reduce-only market cannot open new positions.
+      stale: Boolean(c.disabled) || Boolean(c.reduceOnly) || hourly === 0,
       underlyingClosed: Boolean(c.isClosed),
       volume24hUsd: num(c.usdVolume),
       openInterestUsd: num(c.openInterestUsd),

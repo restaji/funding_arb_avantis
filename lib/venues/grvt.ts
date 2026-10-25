@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/net";
 import type { HedgeMarket } from "@/lib/types";
 
 const BASE = "https://market-data.grvt.io/full/v1";
@@ -9,16 +10,17 @@ const TICKER_API = `${BASE}/ticker`;
  * endpoint here returns 405. Requests carry params as a JSON body, not a
  * query string.
  */
-async function grvtPost<T>(url: string, body: unknown): Promise<T | null> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    next: { revalidate: 120, tags: ["funding"] },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as T;
+async function grvtPost<T>(url: string, body: unknown, retries = 0): Promise<T | null> {
+  try {
+    return await fetchJson<T>(url, {
+      method: "POST",
+      body,
+      timeoutMs: 4500,
+      retries,
+    });
+  } catch {
+    return null;
+  }
 }
 
 interface GrvtInstrument {
@@ -26,6 +28,7 @@ interface GrvtInstrument {
   base?: string;
   quote?: string;
   kind?: string;
+  status?: string;
   funding_interval_hours?: number;
 }
 
@@ -52,27 +55,70 @@ const num = (v: unknown): number => {
 };
 
 const HOURS_PER_DAY = 24;
+const GRVT_CONCURRENCY = 25;
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      try {
+        results[idx] = { status: "fulfilled", value: await fn(items[idx]) };
+      } catch (reason) {
+        results[idx] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  return results;
+}
 
 /**
  * Every GRVT perpetual, keyed by base symbol.
  *
  * There is no bulk ticker/funding endpoint — /full/v1/ticker only accepts one
- * `instrument` per call, so this fans out to one request per listing
- * (currently ~170, all USDT-quoted PERPETUAL). A per-instrument failure is
- * dropped rather than failing the venue.
+ * `instrument` per call. If `allowedTickers` is provided (from the Veranta book),
+ * we only fetch tickers that can actually match a Veranta pair rather than all
+ * ~185 listings, cutting request volume by more than half.
  *
  * funding_rate is a percent already (not a fraction) settling every
  * funding_interval_hours, e.g. BTC sits at "0.01" (0.01%/8h), the standard
  * perp baseline. Daily is that scaled by 24/interval.
  */
-export async function fetchGrvtMarkets(): Promise<Map<string, HedgeMarket>> {
-  const instrumentsPayload = await grvtPost<GrvtInstrumentsPayload>(INSTRUMENTS_API, {});
-  const instruments = (instrumentsPayload?.result ?? []).filter(
-    (i) => i.kind === "PERPETUAL" && i.instrument && i.base,
+export async function fetchGrvtMarkets(
+  allowedTickers?: Set<string>,
+): Promise<Map<string, HedgeMarket>> {
+  const instrumentsPayload = await grvtPost<GrvtInstrumentsPayload>(
+    INSTRUMENTS_API,
+    { is_active: true },
+    1,
   );
+  const instruments = (instrumentsPayload?.result ?? []).filter((i) => {
+    if (
+      i.kind !== "PERPETUAL" ||
+      (i.status && i.status !== "ACTIVE") ||
+      !i.instrument ||
+      !i.base
+    ) {
+      return false;
+    }
+    if (allowedTickers && allowedTickers.size > 0) {
+      return allowedTickers.has(String(i.base).toUpperCase());
+    }
+    return true;
+  });
 
-  const tickers = await Promise.allSettled(
-    instruments.map((i) => grvtPost<GrvtTickerPayload>(TICKER_API, { instrument: i.instrument })),
+  const tickers = await mapPool(instruments, GRVT_CONCURRENCY, (i) =>
+    grvtPost<GrvtTickerPayload>(TICKER_API, { instrument: i.instrument }, 0),
   );
 
   const out = new Map<string, HedgeMarket>();

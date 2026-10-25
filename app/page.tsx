@@ -8,7 +8,7 @@ import { utcStamp } from "@/lib/format";
 import { scan } from "@/lib/strategy";
 import { HEDGE_VENUES, VENUE_LABEL } from "@/lib/types";
 
-export const revalidate = 120;
+export const revalidate = 60;
 
 export default async function Page() {
   const { opportunities, blocked, counts, venueErrors, fetchedAt } = await scan();
@@ -50,8 +50,8 @@ export default async function Page() {
           {hasVenueError
             ? "Venue data is unavailable, so nothing can be ranked right now."
             : noEdge.length > 0
-              ? "Nothing currently pays enough to cover the Avantis fee."
-              : "No market is open on Avantis and a hedge venue at the same time."}
+              ? "Nothing currently pays enough to cover the Veranta rate."
+              : "No market is open on Veranta and a hedge venue at the same time."}
         </div>
       )}
 
@@ -73,7 +73,7 @@ export default async function Page() {
 
       <footer>
         <div className="matchup">
-          <Venue venue="avantis" size={22} />
+          <Venue venue="veranta" size={22} />
           {HEDGE_VENUES.map((v) => (
             <Fragment key={v}>
               <span className="cross">×</span>
@@ -83,7 +83,7 @@ export default async function Page() {
         </div>
 
         <div className="footer-meta">
-          <span>Avantis {counts.avantisMarkets}</span>
+          <span>Veranta {counts.verantaMarkets}</span>
           {HEDGE_VENUES.filter((v) => counts.hedgeMarkets[v] !== undefined).map((v) => (
             <span key={v}>
               <span className="dot">/</span>

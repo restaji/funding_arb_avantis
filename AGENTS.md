@@ -2,8 +2,8 @@
 
 ## Cursor Cloud specific instructions
 
-This is a **Next.js 16 (App Router, Turbopack) + React 19 + TypeScript** app: an
-Avantis-anchored funding-carry scanner across hedge venues (Variational, Ondo, GRVT).
+This is a **Next.js 16 (App Router, Turbopack) + React 19 + TypeScript** app: a
+Veranta-anchored funding-carry scanner across hedge venues (Hyperliquid, Lighter, Ostium, Variational, Ondo, GRVT, Pacifica, Jupiter, Antarctic, Binance, Bybit, OKX, Gate).
 See `README.md` for the domain model and `lib/strategy.ts` for the scan math.
 
 ### Services
@@ -22,7 +22,7 @@ environment variables**; every venue endpoint is public and unauthenticated
 - `/api/funding` — raw funding per matched market.
 - `/api/opportunities` — ranked paying pairs + withheld list. Fastest health check:
   `curl -s localhost:3000/api/opportunities` and confirm `venueErrors` is `{}` and
-  `counts.avantisMarkets` / `counts.hedgeMarkets` are non-zero.
+  `counts.verantaMarkets` / `counts.hedgeMarkets` are non-zero.
 
 ### Non-obvious caveats
 
@@ -30,7 +30,7 @@ environment variables**; every venue endpoint is public and unauthenticated
   access is required** for the board to populate; with no network the page renders but
   markets are withheld and `venueErrors` is populated.
 - Results are time/market-dependent. Expect most non-crypto markets to be withheld on
-  weekends and outside US cash hours (Avantis trading-calendar gate) — this is correct
+  weekends and outside US cash hours (Veranta trading-calendar gate) — this is correct
   behavior, not a failure. Crypto is always open.
-- Routes revalidate every 120s, so the board is cached briefly; use the in-UI refresh
-  button (a server action) to force a fresh scan.
+- Routes revalidate every 60s, so the board is cached briefly; the in-UI refresh
+  button (a server action) force-scans, and the open page auto-refreshes on that same interval.

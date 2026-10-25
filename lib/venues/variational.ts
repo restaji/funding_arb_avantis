@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/net";
 import type { VariationalMarket } from "@/lib/types";
 
 const STATS_API =
@@ -46,13 +47,7 @@ const DAYS_PER_YEAR = 365;
  * impersonation, omni-client-api.prod does not.
  */
 export async function fetchVariationalMarkets(): Promise<Map<string, VariationalMarket>> {
-  const res = await fetch(STATS_API, {
-    next: { revalidate: 120, tags: ["funding"] },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`Variational /metadata/stats ${res.status}`);
-
-  const payload = (await res.json()) as VariationalPayload;
+  const payload = await fetchJson<VariationalPayload>(STATS_API);
   const out = new Map<string, VariationalMarket>();
 
   for (const l of payload.listings ?? []) {

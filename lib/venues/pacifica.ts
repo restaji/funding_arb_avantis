@@ -1,3 +1,4 @@
+import { fetchJson } from "@/lib/net";
 import type { HedgeMarket } from "@/lib/types";
 
 const PRICES_API = "https://api.pacifica.fi/api/v1/info/prices";
@@ -42,13 +43,7 @@ const HOURS_PER_DAY = 24;
  * ~680 at a ~$63k mark is ~$43M, not $680), so OI is mark-multiplied.
  */
 export async function fetchPacificaMarkets(): Promise<Map<string, HedgeMarket>> {
-  const res = await fetch(PRICES_API, {
-    next: { revalidate: 120, tags: ["funding"] },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`Pacifica /api/v1/info/prices ${res.status}`);
-
-  const payload = (await res.json()) as PacificaPricesPayload;
+  const payload = await fetchJson<PacificaPricesPayload>(PRICES_API);
   const out = new Map<string, HedgeMarket>();
 
   for (const p of payload.data ?? []) {

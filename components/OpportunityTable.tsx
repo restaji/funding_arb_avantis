@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 
+import { Tip } from "@/components/Tooltip";
 import { Venue, venueTone } from "@/components/Venue";
-import { bps, earnClass, pct, share, usd } from "@/lib/format";
+import { bps, earnClass, pct, usd } from "@/lib/format";
 import { CLASS_LABEL, CLASS_ORDER, type AssetClass } from "@/lib/symbols";
 import {
   HEDGE_VENUES,
@@ -36,7 +37,7 @@ interface Row {
 const VALUE: Record<SortKey, (r: Row) => number | string> = {
   rank: (r) => r.rank,
   asset: (r) => r.o.asset,
-  // Which venue is on the far side and which way round Avantis sits, so the
+  // Which venue is on the far side and which way round Veranta sits, so the
   // rows that are the same trade group together.
   trade: (r) => `${r.o.hedgeVenue} ${r.o.anchorSide}`,
   av: (r) => r.avBps,
@@ -48,8 +49,8 @@ const VALUE: Record<SortKey, (r: Row) => number | string> = {
   vol: (r) => r.o.volume24hUsd,
   hvol: (r) => r.o.hedgeVolume24hUsd,
   oi: (r) => {
-    const t = r.o.avantisLongOiUsd + r.o.avantisShortOiUsd;
-    return t > 0 ? r.o.avantisLongOiUsd / t : 0.5;
+    const t = r.o.verantaLongOiUsd + r.o.verantaShortOiUsd;
+    return t > 0 ? r.o.verantaLongOiUsd / t : 0.5;
   },
 };
 
@@ -95,7 +96,7 @@ function balance(avBps: number, hedgeBps: number, hedgeTone: string, scale: numb
 
     const a = Math.max(0, Math.min(100, from));
     const b = Math.max(0, Math.min(100, to));
-    if (b > a) segs.push({ tone, left: a, width: b - a });
+    if (b > a) segs.push({ tone, left: Number(a.toFixed(3)), width: Number((b - a).toFixed(3)) });
   }
 
   const net = -(avBps + hedgeBps);
@@ -103,7 +104,7 @@ function balance(avBps: number, hedgeBps: number, hedgeTone: string, scale: numb
   if (raw > 100) over = "right";
   if (raw < 0) over = "left";
 
-  return { segs, tick: Math.min(100, Math.max(0, raw)), over };
+  return { segs, tick: Number(Math.min(100, Math.max(0, raw)).toFixed(3)), over };
 }
 
 /**
@@ -132,8 +133,8 @@ function volMeter(v: number, max: number): number {
 function oiSplit(longUsd: number, shortUsd: number): { longPct: number; shortPct: number } {
   const t = longUsd + shortUsd;
   if (t <= 0) return { longPct: 0, shortPct: 0 };
-  const longPct = (longUsd / t) * 100;
-  return { longPct, shortPct: 100 - longPct };
+  const longPct = Number(((longUsd / t) * 100).toFixed(3));
+  return { longPct, shortPct: Number((100 - longPct).toFixed(3)) };
 }
 
 function Header({
@@ -153,15 +154,16 @@ function Header({
 }) {
   const active = sort.key === sortKey;
   return (
-    <th
+    <Tip
+      as="th"
+      content={title}
       className={`sortable ${className}`}
-      title={title}
       aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
       onClick={() => onSort(sortKey)}
     >
       {label}
       <span className="arrow">{active ? (sort.dir === "asc" ? "▲" : "▼") : "·"}</span>
-    </th>
+    </Tip>
   );
 }
 
@@ -314,26 +316,37 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
           <table>
             <thead>
               <tr>
-                <Header label="#" sortKey="rank" className="num" {...head} />
-                <Header label="Asset" sortKey="asset" {...head} />
+                <Header
+                  label="#"
+                  sortKey="rank"
+                  className="num"
+                  title="Position under the sort in force. Click any header to re-sort."
+                  {...head}
+                />
+                <Header
+                  label="Asset"
+                  sortKey="asset"
+                  title="The market, as Veranta names it, matched to the hedge venue by symbol."
+                  {...head}
+                />
                 <Header
                   label="The trade"
                   sortKey="trade"
-                  title="Which venue takes the far side, and which way round Avantis sits."
+                  title="Which way round Veranta sits, and which venue takes the far side."
                   {...head}
                 />
                 <Header
-                  label="Avantis leg"
+                  label="Veranta leg (24h)"
                   sortKey="av"
                   className="num av"
-                  title="Borrow fee on the anchor leg, bps of notional per day. Positive means you pay."
+                  title="Veranta's 24h rate, funding plus borrow, in bps of notional. Positive means you pay."
                   {...head}
                 />
                 <Header
-                  label="Hedge leg"
+                  label="Hedge leg (24h)"
                   sortKey="hedge"
                   className="num hedge"
-                  title="Funding on the hedge leg, bps of notional per day. Negative means you receive."
+                  title="The hedge venue's 24h funding, in bps of notional. Positive means you pay."
                   {...head}
                 />
                 <Header
@@ -342,21 +355,39 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                   title="Cost left of the axis, income right of it. The tick is the net."
                   {...head}
                 />
-                <Header label="Net carry" sortKey="net" className="num key" {...head} />
-                <Header label="Net APR" sortKey="apr" className="num key" {...head} />
-                <Header label="Avantis 24h vol" sortKey="vol" className="num" {...head} />
+                <Header
+                  label="Net carry (24h)"
+                  sortKey="net"
+                  className="num key"
+                  title="Both legs summed and negated, in bps of notional per day. Positive means the position pays you."
+                  {...head}
+                />
+                <Header
+                  label="Net APR"
+                  sortKey="apr"
+                  className="num key"
+                  title="Net carry annualized flat. A snapshot rate, not a backtest."
+                  {...head}
+                />
+                <Header
+                  label="Veranta 24h vol"
+                  sortKey="vol"
+                  className="num"
+                  title="Notional traded on Veranta over the last day."
+                  {...head}
+                />
                 <Header
                   label="Hedge 24h vol"
                   sortKey="hvol"
                   className="num"
-                  title="Volume on the venue taking the far side. The thinner of the two legs caps the pair."
+                  title="Notional traded on the venue taking the far side. The thinner leg caps the pair."
                   {...head}
                 />
                 <Header
-                  label="Avantis L / S"
+                  label="Veranta L / S"
                   sortKey="oi"
                   className="num"
-                  title="Avantis long and short open interest. Sort is the long share of the pair."
+                  title="Veranta long against short open interest. Sorted on the long share."
                   {...head}
                 />
               </tr>
@@ -367,7 +398,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                 const hedgeTone = venueTone(o.hedgeVenue);
                 const { segs, tick, over } = balance(avBps, hedgeBps, hedgeTone, scale);
                 const hedgeSide = o.anchorSide === "long" ? "short" : "long";
-                const split = oiSplit(o.avantisLongOiUsd, o.avantisShortOiUsd);
+                const split = oiSplit(o.verantaLongOiUsd, o.verantaShortOiUsd);
                 return (
                   <tr key={o.asset} className={r.rank === 1 ? "lead-row" : ""}>
                     <td className="rank">{r.rank}</td>
@@ -377,9 +408,9 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                         {o.label}
                         <span className="klass bare">{CLASS_LABEL[o.klass]}</span>
                         {o.caveat && (
-                          <span className="approx" title={o.caveat}>
+                          <Tip className="approx" content={o.caveat}>
                             approx
-                          </span>
+                          </Tip>
                         )}
                       </span>
                     </td>
@@ -387,7 +418,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                       <span className="direction">
                         <span className="row">
                           <span className={`s ${o.anchorSide}`}>{o.anchorSide}</span>
-                          <Venue venue="avantis" />
+                          <Venue venue="veranta" />
                         </span>
                         <span className="row">
                           <span className={`s ${hedgeSide}`}>{hedgeSide}</span>
@@ -395,29 +426,25 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                         </span>
                       </span>
                     </td>
-                    <td className="num av-num">{bps(avBps, 2)}</td>
-                    <td className={`num ${hedgeTone}-num`}>{bps(hedgeBps, 2)}</td>
+                    <td className="num av-num">
+                      <span>{bps(avBps, 2)}</span>
+                      <span className="leg-sub">{pct(avBps / 100, 3)}/24h</span>
+                    </td>
+                    <td className={`num ${hedgeTone}-num`}>
+                      <span>{bps(hedgeBps, 2)}</span>
+                      <span className="leg-sub">{pct(hedgeBps / 100, 3)}/24h</span>
+                    </td>
                     <td className="balance">
-                      <div
-                        className="bar"
-                        title={`Avantis costs ${bps(avBps, 2)}, ${
-                          VENUE_LABEL[o.hedgeVenue]
-                        } ${hedgeBps < 0 ? "pays" : "costs"} ${bps(
-                          Math.abs(hedgeBps),
-                          2,
-                        )} — net ${bps(o.netCarryBps, 2)} bps/day${
-                          over ? ", off the scale of this column" : ""
-                        }`}
-                      >
+                      <div className="bar">
                         {over && (
                           <span className={`over ${over}`} aria-hidden>
                             {over === "right" ? "›" : "‹"}
                           </span>
                         )}
                         <span className="axis" aria-hidden />
-                        {segs.map((s) => (
+                        {segs.map((s, idx) => (
                           <span
-                            key={s.tone}
+                            key={s.tone ?? idx}
                             className={`seg ${s.tone}`}
                             style={{ left: `${s.left}%`, width: `${s.width}%` }}
                           />
@@ -427,6 +454,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                     </td>
                     <td className={`num ${earnClass(o.netCarryBps)}`}>
                       <strong>{bps(o.netCarryBps, 2)}</strong>
+                      <span className="leg-sub">{pct(o.netCarryBps / 100, 3)}/24h</span>
                     </td>
                     <td className={`num ${earnClass(o.carryAprPct)}`}>
                       <strong>{pct(o.carryAprPct, 1)}</strong>
@@ -434,7 +462,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                     <td className="num">
                       <span className="dim">{usd(o.volume24hUsd)}</span>
                       <span className="meter" aria-hidden>
-                        <i style={{ width: `${volMeter(o.volume24hUsd, maxVol) * 100}%` }} />
+                        <i style={{ width: `${(volMeter(o.volume24hUsd, maxVol) * 100).toFixed(3)}%` }} />
                       </span>
                     </td>
                     <td className="num">
@@ -442,19 +470,16 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
                       <span className="meter" aria-hidden>
                         <i
                           style={{
-                            width: `${volMeter(o.hedgeVolume24hUsd, maxVol) * 100}%`,
+                            width: `${(volMeter(o.hedgeVolume24hUsd, maxVol) * 100).toFixed(3)}%`,
                           }}
                         />
                       </span>
                     </td>
-                    <td
-                      className="num"
-                      title={`Long ${usd(o.avantisLongOiUsd)} · Short ${usd(o.avantisShortOiUsd)} · ${share(o.avantisOiUtil, 1)} of OI cap used`}
-                    >
+                    <td className="num">
                       <span className="dim ls">
-                        <span className="l">{usd(o.avantisLongOiUsd)}</span>
+                        <span className="l">{usd(o.verantaLongOiUsd)}</span>
                         <span className="sep">/</span>
-                        <span className="sh">{usd(o.avantisShortOiUsd)}</span>
+                        <span className="sh">{usd(o.verantaShortOiUsd)}</span>
                       </span>
                       <span className="meter skew" aria-hidden>
                         <i className="long" style={{ flex: `${split.longPct} 0 0` }} />
@@ -471,7 +496,7 @@ export function OpportunityTable({ rows }: { rows: Opportunity[] }) {
 
       <div className="bar-key">
         <span>
-          <i className="av" aria-hidden /> Avantis cost
+          <i className="av" aria-hidden /> Veranta rate
         </span>
         {venueCounts.map(([v]) => (
           <span key={v}>

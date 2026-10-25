@@ -1,9 +1,9 @@
 /* =========================================================
-   Avantis × hedge-venue funding carry — Editorial Terminal
+   Veranta × hedge-venue funding carry — Editorial Terminal
    Cream paper · ink-black type · serif display · hard edges
 
    Venue identity is carried by colour and used for nothing else:
-     Avantis     violet   — the anchor leg, always a cost
+     Veranta     violet   — the anchor leg
      Variational blue
      Ondo        teal
      GRVT        amber
@@ -33,7 +33,14 @@
   --earn: #146b36;
   --earn-mute: rgba(20, 107, 54, 0.12);
 
-  /* Avantis — violet */
+  /* Tooltip surface. */
+  --tip-bg: #12120f;
+  --tip-ink: #f2efe6;
+  --tip-dim: #d8d4c7;
+  --tip-mute: #938f84;
+  --tip-rule: #343430;
+
+  /* Veranta — violet */
   --av: #6d28d9;
   --av-ink: #55208f;
   --av-wash: rgba(109, 40, 217, 0.08);
@@ -62,6 +69,60 @@
   --pa-ink: #075985;
   --pa-wash: rgba(2, 132, 199, 0.08);
   --pa-bar: #38bdf8;
+
+  /* Hyperliquid — emerald */
+  --hl: #059669;
+  --hl-ink: #065f46;
+  --hl-wash: rgba(5, 150, 105, 0.08);
+  --hl-bar: #10b981;
+
+  /* Lighter — slate */
+  --lt: #475569;
+  --lt-ink: #334155;
+  --lt-wash: rgba(71, 85, 105, 0.08);
+  --lt-bar: #64748b;
+
+  /* Ostium — burnt orange */
+  --os: #ea580c;
+  --os-ink: #9a3412;
+  --os-wash: rgba(234, 88, 12, 0.08);
+  --os-bar: #f97316;
+
+  /* Binance — gold */
+  --bn: #d97706;
+  --bn-ink: #92400e;
+  --bn-wash: rgba(217, 119, 6, 0.08);
+  --bn-bar: #f59e0b;
+
+  /* Bybit — bronze */
+  --bb: #b45309;
+  --bb-ink: #78350f;
+  --bb-wash: rgba(180, 83, 9, 0.08);
+  --bb-bar: #d97706;
+
+  /* OKX — indigo */
+  --ok: #4f46e5;
+  --ok-ink: #3730a3;
+  --ok-wash: rgba(79, 70, 229, 0.08);
+  --ok-bar: #6366f1;
+
+  /* Gate — magenta */
+  --gt: #db2777;
+  --gt-ink: #9d174d;
+  --gt-wash: rgba(219, 39, 119, 0.08);
+  --gt-bar: #ec4899;
+
+  /* Jupiter — lime */
+  --ju: #16a34a;
+  --ju-ink: #166534;
+  --ju-wash: rgba(22, 163, 74, 0.08);
+  --ju-bar: #22c55e;
+
+  /* Antarctic — ice cyan */
+  --ax: #0284c7;
+  --ax-ink: #0c4a6e;
+  --ax-wash: rgba(2, 132, 199, 0.08);
+  --ax-bar: #0ea5e9;
 
   --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -135,7 +196,8 @@ body {
 .matchup {
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   font-family: var(--font-mono);
   font-size: 13.5px;
   font-weight: 700;
@@ -259,6 +321,42 @@ h1 {
   color: var(--pa-ink);
 }
 
+.venue.hl {
+  color: var(--hl-ink);
+}
+
+.venue.lt {
+  color: var(--lt-ink);
+}
+
+.venue.os {
+  color: var(--os-ink);
+}
+
+.venue.bn {
+  color: var(--bn-ink);
+}
+
+.venue.bb {
+  color: var(--bb-ink);
+}
+
+.venue.ok {
+  color: var(--ok-ink);
+}
+
+.venue.gt {
+  color: var(--gt-ink);
+}
+
+.venue.ju {
+  color: var(--ju-ink);
+}
+
+.venue.ax {
+  color: var(--ax-ink);
+}
+
 /* ── Sections ─────────────────────────────────────────── */
 
 section {
@@ -313,6 +411,7 @@ h2 {
 
 .chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   border: 1px solid var(--rule-mid);
 }
@@ -619,6 +718,92 @@ th.num {
   color: var(--pa-ink);
 }
 
+.hl-num {
+  color: var(--hl-ink);
+}
+
+.lt-num {
+  color: var(--lt-ink);
+}
+
+.os-num {
+  color: var(--os-ink);
+}
+
+.bn-num {
+  color: var(--bn-ink);
+}
+
+.bb-num {
+  color: var(--bb-ink);
+}
+
+.ok-num {
+  color: var(--ok-ink);
+}
+
+.gt-num {
+  color: var(--gt-ink);
+}
+
+.ju-num {
+  color: var(--ju-ink);
+}
+
+.ax-num {
+  color: var(--ax-ink);
+}
+
+/* ── Tooltip ──────────────────────────────────────────────
+   Dark readout over a cream page: unmistakably foreground
+   without resorting to a shadow.
+   ───────────────────────────────────────────────────────── */
+
+.tip {
+  position: fixed;
+  z-index: 60;
+  background: var(--tip-bg);
+  color: var(--tip-ink);
+  padding: 9px 11px 10px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.55;
+  max-width: 340px;
+  /* Never let the tooltip eat the hover that opened it. */
+  pointer-events: none;
+}
+
+.tip-text {
+  max-width: 34ch;
+  color: var(--tip-ink);
+}
+
+.tip-head {
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--tip-mute);
+  padding-bottom: 7px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--tip-rule);
+  white-space: nowrap;
+}
+
+.tip-why {
+  display: block;
+  max-width: 32ch;
+  color: var(--tip-dim);
+}
+
+.leg-sub {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  letter-spacing: 0.01em;
+  margin-top: 2px;
+}
+
 /* ── Direction cell ───────────────────────────────────── */
 
 .direction {
@@ -709,6 +894,51 @@ th.num {
   opacity: 0.9;
 }
 
+.bar .seg.hl {
+  background: var(--hl-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.lt {
+  background: var(--lt-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.os {
+  background: var(--os-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.bn {
+  background: var(--bn-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.bb {
+  background: var(--bb-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.ok {
+  background: var(--ok-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.gt {
+  background: var(--gt-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.ju {
+  background: var(--ju-bar);
+  opacity: 0.9;
+}
+
+.bar .seg.ax {
+  background: var(--ax-bar);
+  opacity: 0.9;
+}
+
 .bar .tick {
   position: absolute;
   top: -4px;
@@ -789,6 +1019,51 @@ th.num {
 
 .bar-key i.pa {
   background: var(--pa-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.hl {
+  background: var(--hl-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.lt {
+  background: var(--lt-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.os {
+  background: var(--os-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.bn {
+  background: var(--bn-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.bb {
+  background: var(--bb-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.ok {
+  background: var(--ok-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.gt {
+  background: var(--gt-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.ju {
+  background: var(--ju-bar);
+  opacity: 0.9;
+}
+
+.bar-key i.ax {
+  background: var(--ax-bar);
   opacity: 0.9;
 }
 

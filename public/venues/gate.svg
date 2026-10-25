@@ -1,0 +1,5 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="256" height="256" rx="48" fill="#0B192C"/>
+<path d="M128 56C88.2355 56 56 88.2355 56 128C56 167.765 88.2355 200 128 200V164C108.118 164 92 147.882 92 128C92 108.118 108.118 92 128 92V56Z" fill="#2354E6"/>
+<rect x="128" y="128" width="72" height="72" fill="#17E6A1"/>
+</svg>

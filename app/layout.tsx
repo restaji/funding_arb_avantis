@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Funding rate arbitrage",
   description:
-    "Delta-neutral funding carry across perp venues, Avantis-anchored. Funding only.",
+    "Delta-neutral funding carry across perp venues, Veranta-anchored. Funding only.",
 };
 
 export default function RootLayout({

@@ -1,8 +1,9 @@
+import { Tip, TipHead } from "@/components/Tooltip";
 import { type Blocked, type BlockedReason } from "@/lib/types";
 
 const REASON_LABEL: Record<BlockedReason, string> = {
-  no_edge: "No edge after the Avantis fee",
-  anchor_closed: "Avantis market closed",
+  no_edge: "No edge after the Veranta rate",
+  anchor_closed: "Veranta market closed",
   hedge_closed: "Every hedge market closed",
   not_listed_hedge: "Not listed on any hedge venue",
 };
@@ -35,15 +36,24 @@ export function WithheldPanel({ blocked }: { blocked: Blocked[] }) {
             </span>
             <span className="wh-reason">{REASON_LABEL[reason]}</span>
             <span className="wh-share" aria-hidden>
-              <i style={{ width: `${(items.length / biggest) * 100}%` }} />
+              <i style={{ width: `${((items.length / biggest) * 100).toFixed(3)}%` }} />
             </span>
             <span className="wh-count">{items.length}</span>
           </summary>
           <div className="wh-assets">
             {items.map((b) => (
-              <span className="a" key={b.asset} title={`${b.label} — ${b.detail}`}>
+              <Tip
+                className="a"
+                key={b.asset}
+                content={
+                  <>
+                    <TipHead label={b.label} />
+                    <span className="tip-why">{b.detail}</span>
+                  </>
+                }
+              >
                 {b.asset}
-              </span>
+              </Tip>
             ))}
           </div>
         </details>

@@ -1,9 +1,9 @@
 /**
  * Asset identity across venues.
  *
- * The universe is not a hardcoded list. Avantis publishes a Pyth-style symbol
+ * The universe is not a hardcoded list. Veranta publishes a Pyth-style symbol
  * on every pair (`feed.attributes.symbol`, e.g. "Crypto.BTC/USD"), so the
- * tradeable set is derived at runtime as the intersection of what Avantis
+ * tradeable set is derived at runtime as the intersection of what Veranta
  * lists and what any hedge venue lists. New listings on either side appear
  * without a code change.
  *
@@ -16,7 +16,7 @@ import type { HedgeVenueId } from "@/lib/types";
 export type AssetClass = "crypto" | "equity" | "commodity" | "metal" | "fx" | "other";
 
 export interface ParsedSymbol {
-  /** Canonical key, taken from the Avantis base since Avantis anchors every pair. */
+  /** Canonical key, taken from the Veranta base since Veranta anchors every pair. */
   base: string;
   klass: AssetClass;
 }
@@ -33,10 +33,10 @@ const CLASS_BY_PREFIX: Record<string, AssetClass> = {
 /**
  * "Crypto.BTC/USD"        -> { base: "BTC",     klass: "crypto" }
  * "Equity.US.SPY/USD"     -> { base: "SPY",     klass: "equity" }
- * "Commodities.WTIV6/USD" -> { base: "WTIV6",   klass: "commodity" }
+ * "Commodities.CLLZ6/USD" -> { base: "CLLZ6",   klass: "commodity" }
  * "FX.EUR/USD"            -> { base: "EURUSD",  klass: "fx" }
  */
-export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | null {
+export function parseVerantaSymbol(symbol: string | undefined): ParsedSymbol | null {
   if (!symbol) return null;
   const parts = symbol.split(".");
   if (parts.length < 2) return null;
@@ -57,52 +57,117 @@ export function parseAvantisSymbol(symbol: string | undefined): ParsedSymbol | n
 const FUTURES_EXPIRY = /^([A-Z]+)[FGHJKMNQUVXZ]\d$/;
 
 /**
- * Root commodity for a dated-futures base, e.g. "WTIV6" / "WTIM6" -> "WTI".
+ * Root commodity for a dated-futures base, e.g. "WTIV6" / "CLLZ6" -> "WTI".
  * Returns null for bases that aren't a dated-futures contract.
  */
 export function futuresRoot(base: string): string | null {
   const m = FUTURES_EXPIRY.exec(base);
-  return m ? m[1] : null;
+  if (!m) return null;
+  // Pyth switched its dated WTI crude feed from WTI* to CLL* (e.g. CLLZ6).
+  return m[1] === "CLL" ? "WTI" : m[1];
 }
 
 /**
- * Avantis base -> hedge venue ticker, only where plain equality fails.
+ * Veranta base -> hedge venue ticker, only where plain equality fails.
+ * A `null` entry blocks a false ticker collision (same symbol, different asset).
+ *
+ * Hyperliquid: main-book crypto markets use bare symbols (`BTC`, `kBONK`,
+ * `kPEPE`, `kSHIB`), whereas RWA / equity / metal / FX markets live on the
+ * `xyz` HIP-3 dex (`XYZ:NVDA`, `XYZ:GOLD`, `XYZ:EUR`, etc.). Keeping the `XYZ:`
+ * prefix in the map prevents equity tickers like `DASH` (DoorDash) and `STX`
+ * (Seagate) from colliding with main-book crypto tokens (`DASH` = Dash, `STX` =
+ * Stacks). Hyperliquid's `xyz:SP500` (~7600) and `xyz:XYZ100` (~28900) are the
+ * indices rather than the SPY/QQQ ETFs (~760 / ~700), so `SPY` and `QQQ` are
+ * blocked (`null`).
+ *
+ * Lighter: lists both the SPY/QQQ ETFs and the US500/US100 indices under their
+ * own symbols, plus 1000x meme contracts (`1000BONK`, `1000PEPE`, `1000SHIB`,
+ * `1000FLOKI`). `DASH` on Lighter is Dash (crypto), not DoorDash.
+ *
+ * Ostium: keys pairs as `${from}${to}` (e.g. `XAUUSD`, `NVDAUSD`, `EURUSD`).
+ * Its `SPXUSD` and `NDXUSD` are the indices, not the SPY/QQQ ETFs.
  *
  * Variational: the 1000x contracts are a denomination difference, not an asset
  * difference. Funding is a percentage of notional, so it is invariant to the
  * contract multiplier and the match is exact for our purposes. SPY maps to
  * US500, which despite the index-sounding ticker is Variational's listing of
- * the SPDR S&P 500 ETF itself, marked around 742 like the ETF. Do not be
- * tempted by Variational's SPX: that is SPX6900, a memecoin.
+ * the SPDR S&P 500 ETF itself, marked around 760 like the ETF. Do not be
+ * tempted by Variational's SPX: that is SPX6900, a memecoin. BB and STX
+ * (BlackBerry and Seagate Technology) are X-suffixed (`BBX`, `STXX`); plain
+ * `STX` on Variational is Stacks (crypto), and plain `DASH` on Variational is
+ * Dash (crypto) whereas Veranta's `DASH` is DoorDash (`Equity.US.DASH/USD`).
  *
- * Ondo: lists no crypto beyond BTC and ETH, so the 1000x cases never arise.
- * It quotes generic WTI and Brent rather than a dated contract, and carries
+ * Ondo: quotes generic WTI and Brent rather than a dated contract, and carries
  * SPY and QQQ under their own tickers, so SPY needs no redirect the way it
  * does on Variational. Ondo's US500 is the index, not the ETF.
  *
  * Pacifica: kBONK/kPEPE/kSHIB are the same 1000x denomination as Variational.
- * SKHY is Avantis's truncated ticker for SK Hynix; Pacifica lists SKHYNIX.
- * Pacifica's SP500 is the index (~7800), not the SPY ETF — do not redirect.
+ * SKHY is Veranta's truncated ticker for SK Hynix; Pacifica lists SKHYNIX.
+ * Pacifica's SP500 is the index (~7600), not the SPY ETF — do not redirect.
  *
- * Dated crude (WTIV6, BRENTX6, …) is matched by root in FUTURES_HEDGE rather
- * than listed expiry-by-expiry here — Avantis rolls the contract and the hedge
- * venues quote the generic.
+ * Binance / Bybit / OKX / Gate: CEX linear USDT perps. On Binance, Bybit and
+ * Gate, plain `BB` is BounceBit (crypto, ~$0.0076), whereas Binance and Bybit
+ * list BlackBerry as `BBX` and Seagate as `STXX` (plain `STX` is Stacks and
+ * plain `DASH` is Dash on all four CEXs). OKX's `BB` is BlackBerry (~$8.89).
+ *
+ * Dated crude (CLLZ6, WTIV6, BRENTZ6, …) is matched by root in FUTURES_HEDGE
+ * rather than listed expiry-by-expiry here — Veranta rolls the contract and the
+ * hedge venues quote the generic.
  */
-export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
+export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string | null>> = {
+  hyperliquid: {
+    BONK: "kBONK",
+    PEPE: "kPEPE",
+    SHIB: "kSHIB",
+    FLOKI: "kFLOKI",
+    XAU: "XYZ:GOLD",
+    XAG: "XYZ:SILVER",
+    EURUSD: "XYZ:EUR",
+    GBPUSD: "XYZ:GBP",
+    USDJPY: "XYZ:JPY",
+    USDKRW: "XYZ:KRW",
+    GOOG: "XYZ:GOOGL",
+    SPY: null,
+    QQQ: null,
+    DASH: null,
+    STX: null,
+  },
+  lighter: {
+    BONK: "1000BONK",
+    PEPE: "1000PEPE",
+    SHIB: "1000SHIB",
+    FLOKI: "1000FLOKI",
+    GOOG: "GOOGL",
+    DASH: null,
+    STX: null,
+  },
+  ostium: {
+    SPY: null,
+    QQQ: null,
+    DASH: null,
+    STX: null,
+  },
   variational: {
     SPY: "US500",
     BONK: "1000BONK",
     PEPE: "1000PEPE",
     PUMP: "PUMPFUN",
+    LIT: "LIGHTER",
     GOOG: "GOOGL",
     BB: "BBX",
+    STX: "STXX",
+    DASH: null,
   },
   ondo: {
     GOOG: "GOOGL",
   },
   grvt: {
+    BONK: "KBONK",
+    PEPE: "KPEPE",
+    SHIB: "KSHIB",
     GOOG: "GOOGL",
     BB: "BBX",
+    STX: "STXX",
   },
   pacifica: {
     GOOG: "GOOGL",
@@ -111,17 +176,64 @@ export const HEDGE_OVERRIDES: Record<HedgeVenueId, Record<string, string>> = {
     SHIB: "kSHIB",
     SKHY: "SKHYNIX",
   },
+  jupiter: {},
+  antarctic: {
+    XAU: "GOLD",
+    XAG: "SILVER",
+    GOOG: "GOOGL",
+  },
+  binance: {
+    BONK: "1000BONK",
+    PEPE: "1000PEPE",
+    SHIB: "1000SHIB",
+    FLOKI: "1000FLOKI",
+    GOOG: "GOOGL",
+    BB: "BBX",
+    STX: "STXX",
+    DASH: null,
+  },
+  bybit: {
+    BONK: "1000BONK",
+    PEPE: "1000PEPE",
+    SHIB: "SHIB1000",
+    FLOKI: "1000FLOKI",
+    PUMP: "PUMPFUN",
+    GOOG: "GOOGL",
+    BB: "BBX",
+    STX: "STXX",
+    DASH: null,
+  },
+  okx: {
+    GOOG: "GOOGL",
+    STX: null,
+    DASH: null,
+  },
+  gate: {
+    GOOG: "GOOGL",
+    BB: null,
+    STX: null,
+    DASH: null,
+  },
 };
 
 /**
- * Dated Avantis futures root -> the hedge venue's generic ticker.
+ * Dated Veranta futures root -> the hedge venue's generic ticker.
  * Pacifica has no Brent.
  */
 const FUTURES_HEDGE: Record<HedgeVenueId, Record<string, string>> = {
+  hyperliquid: { WTI: "XYZ:CL", BRENT: "XYZ:BRENTOIL" },
+  lighter: { WTI: "WTI", BRENT: "BRENTOIL" },
+  ostium: { WTI: "CLUSD", BRENT: "BRENTUSD" },
   variational: { WTI: "CL", BRENT: "BZ" },
   ondo: { WTI: "WTI", BRENT: "BRENT" },
   grvt: { WTI: "CL", BRENT: "BZ" },
   pacifica: { WTI: "CL" },
+  jupiter: {},
+  antarctic: { WTI: "CL" },
+  binance: { WTI: "CL", BRENT: "BZ" },
+  bybit: { WTI: "CL", BRENT: "BZ" },
+  okx: { WTI: "CL", BRENT: "BZ" },
+  gate: { WTI: "CL", BRENT: "BZ" },
 };
 
 /**
@@ -130,56 +242,125 @@ const FUTURES_HEDGE: Record<HedgeVenueId, Record<string, string>> = {
  * by futures root in matchCaveatFor so a roll does not drop the warning.
  */
 export const MATCH_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
+  hyperliquid: {
+    GOOG: "Veranta lists Alphabet Class C, Hyperliquid lists Class A (GOOGL) — near but not identical",
+  },
+  lighter: {
+    GOOG: "Veranta lists Alphabet Class C, Lighter lists Class A (GOOGL) — near but not identical",
+  },
+  ostium: {},
   variational: {
-    GOOG: "Avantis lists Alphabet Class C, Variational lists Class A (GOOGL) — near but not identical",
+    GOOG: "Veranta lists Alphabet Class C, Variational lists Class A (GOOGL) — near but not identical",
   },
   ondo: {
-    GOOG: "Avantis lists Alphabet Class C, Ondo lists Class A (GOOGL) — near but not identical",
+    GOOG: "Veranta lists Alphabet Class C, Ondo lists Class A (GOOGL) — near but not identical",
   },
   grvt: {
-    GOOG: "Avantis lists Alphabet Class C, GRVT lists Class A (GOOGL) — near but not identical",
+    GOOG: "Veranta lists Alphabet Class C, GRVT lists Class A (GOOGL) — near but not identical",
   },
   pacifica: {
-    GOOG: "Avantis lists Alphabet Class C, Pacifica lists Class A (GOOGL) — near but not identical",
+    GOOG: "Veranta lists Alphabet Class C, Pacifica lists Class A (GOOGL) — near but not identical",
+  },
+  jupiter: {},
+  antarctic: {
+    GOOG: "Veranta lists Alphabet Class C, Antarctic lists Class A (GOOGL) — near but not identical",
+  },
+  binance: {
+    GOOG: "Veranta lists Alphabet Class C, Binance lists Class A (GOOGL) — near but not identical",
+  },
+  bybit: {
+    GOOG: "Veranta lists Alphabet Class C, Bybit lists Class A (GOOGL) — near but not identical",
+  },
+  okx: {
+    GOOG: "Veranta lists Alphabet Class C, OKX lists Class A (GOOGL) — near but not identical",
+  },
+  gate: {
+    GOOG: "Veranta lists Alphabet Class C, Gate lists Class A (GOOGL) — near but not identical",
   },
 };
 
 const FUTURES_CAVEATS: Record<HedgeVenueId, Record<string, string>> = {
+  hyperliquid: {
+    WTI: "Veranta prices a specific WTI futures expiry, Hyperliquid quotes generic WTI (xyz:CL)",
+    BRENT: "Veranta prices a specific Brent futures expiry, Hyperliquid quotes generic Brent (xyz:BRENTOIL)",
+  },
+  lighter: {
+    WTI: "Veranta prices a specific WTI futures expiry, Lighter quotes generic WTI",
+    BRENT: "Veranta prices a specific Brent futures expiry, Lighter quotes generic Brent (BRENTOIL)",
+  },
+  ostium: {
+    WTI: "Veranta prices a specific WTI futures expiry, Ostium quotes generic WTI (CL/USD)",
+    BRENT: "Veranta prices a specific Brent futures expiry, Ostium quotes generic Brent (BRENT/USD)",
+  },
   variational: {
-    WTI: "Avantis prices a specific WTI futures expiry, Variational quotes generic WTI",
-    BRENT: "Avantis prices a specific Brent futures expiry, Variational quotes generic Brent",
+    WTI: "Veranta prices a specific WTI futures expiry, Variational quotes generic WTI",
+    BRENT: "Veranta prices a specific Brent futures expiry, Variational quotes generic Brent",
   },
   ondo: {
-    WTI: "Avantis prices a specific WTI futures expiry, Ondo quotes generic WTI",
-    BRENT: "Avantis prices a specific Brent futures expiry, Ondo quotes generic Brent",
+    WTI: "Veranta prices a specific WTI futures expiry, Ondo quotes generic WTI",
+    BRENT: "Veranta prices a specific Brent futures expiry, Ondo quotes generic Brent",
   },
   grvt: {
-    WTI: "Avantis prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
-    BRENT: "Avantis prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
+    WTI: "Veranta prices a specific WTI futures expiry, GRVT quotes generic WTI (CL)",
+    BRENT: "Veranta prices a specific Brent futures expiry, GRVT quotes generic Brent (BZ)",
   },
   pacifica: {
-    WTI: "Avantis prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
+    WTI: "Veranta prices a specific WTI futures expiry, Pacifica quotes generic WTI (CL)",
+  },
+  jupiter: {},
+  antarctic: {
+    WTI: "Veranta prices a specific WTI futures expiry, Antarctic quotes generic WTI (CL_USDT)",
+  },
+  binance: {
+    WTI: "Veranta prices a specific WTI futures expiry, Binance quotes generic WTI (CLUSDT)",
+    BRENT: "Veranta prices a specific Brent futures expiry, Binance quotes generic Brent (BZUSDT)",
+  },
+  bybit: {
+    WTI: "Veranta prices a specific WTI futures expiry, Bybit quotes generic WTI (CLUSDT)",
+    BRENT: "Veranta prices a specific Brent futures expiry, Bybit quotes generic Brent (BZUSDT)",
+  },
+  okx: {
+    WTI: "Veranta prices a specific WTI futures expiry, OKX quotes generic WTI (CL-USDT-SWAP)",
+    BRENT: "Veranta prices a specific Brent futures expiry, OKX quotes generic Brent (BZ-USDT-SWAP)",
+  },
+  gate: {
+    WTI: "Veranta prices a specific WTI futures expiry, Gate quotes generic WTI (CL_USDT)",
+    BRENT: "Veranta prices a specific Brent futures expiry, Gate quotes generic Brent (BZ_USDT)",
   },
 };
 
-export function hedgeTickerFor(venue: HedgeVenueId, avantisBase: string): string {
-  const exact = HEDGE_OVERRIDES[venue][avantisBase];
-  if (exact) return exact.toUpperCase();
-  const root = futuresRoot(avantisBase);
+export function hedgeTickerFor(
+  venue: HedgeVenueId,
+  verantaBase: string,
+  klass?: AssetClass,
+): string {
+  const overrides = HEDGE_OVERRIDES[venue];
+  if (verantaBase in overrides) {
+    const exact = overrides[verantaBase];
+    return exact ? exact.toUpperCase() : "";
+  }
+  const root = futuresRoot(verantaBase);
   if (root) {
     const mapped = FUTURES_HEDGE[venue][root];
-    if (mapped) return mapped.toUpperCase();
+    return mapped ? mapped.toUpperCase() : "";
   }
-  return avantisBase.toUpperCase();
+  const upper = verantaBase.toUpperCase();
+  if (venue === "hyperliquid" && klass && klass !== "crypto") {
+    return `XYZ:${upper}`;
+  }
+  if (venue === "ostium") {
+    return klass === "fx" ? upper : `${upper}USD`;
+  }
+  return upper;
 }
 
 export function matchCaveatFor(
   venue: HedgeVenueId,
-  avantisBase: string,
+  verantaBase: string,
 ): string | undefined {
-  const exact = MATCH_CAVEATS[venue][avantisBase];
+  const exact = MATCH_CAVEATS[venue][verantaBase];
   if (exact) return exact;
-  const root = futuresRoot(avantisBase);
+  const root = futuresRoot(verantaBase);
   return root ? FUTURES_CAVEATS[venue][root] : undefined;
 }
 
